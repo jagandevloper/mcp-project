@@ -14,18 +14,6 @@
 
 ---
 
-## 🧭 Navigation
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Module Explorer](#module-explorer)
-- [Extending MCP](#extending-mcp)
-- [Use Cases](#real-world-use-cases)
-- [Getting Help](#getting-help)
-- [Project Structure](#project-structure)
-- [Contribution Guide](#contribution-guide)
-- [License & Contact](#license--contact)
-
----
 
 ## ✨ Features
 
@@ -126,4 +114,5 @@ mcp-project/
 - **Commit** your changes (`git commit -m 'Add some feature'`)
 - **Push** to the branch (`git push origin feature/AmazingFeature`)
 - **Open** a Pull Request
+
 
