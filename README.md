@@ -1,2 +1,0 @@
-# mcp-project
-MCP Projects
