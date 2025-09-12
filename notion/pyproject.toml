@@ -1,0 +1,15 @@
+[project]
+name = "notion"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "composio>=0.8.10",
+    "fastapi>=0.116.1",
+    "fastmcp>=2.12.2",
+    "mcp[cli]>=1.13.1",
+    "notion-client>=2.5.0",
+    "python-dotenv>=1.0.1",
+    "poetry>=2.1.4",
+]
