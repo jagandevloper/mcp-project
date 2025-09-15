@@ -1,9 +1,10 @@
 import os
+from dotenv import load_dotenv
 from notion_client import Client, APIResponseError
 from mcp.server.fastmcp import FastMCP
 from typing import Dict, Any
-
-
+# ---------- Load environment ----------
+load_dotenv()
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 
 if not NOTION_API_KEY:
@@ -203,34 +204,26 @@ def list_block_children(block_id: str, page_size: int = 50):
     return safe_execute(notion.blocks.children.list, block_id, page_size=page_size)
 
 @mcp.tool()
-def append_block_children(block_id: str, children: list):
+def append_block(parent_id: str, children: list):
     """
-    Append children (content blocks) to a block/page.
-    Example child block:
-    {
-      "object": "block",
-      "type": "paragraph",
-      "paragraph": {
-        "rich_text": [
-          {"type": "text", "text": {"content": "Hello world"}}
-        ]
-      }
-    }
+    Append one or more blocks to a page or block.
+    
     """
-    return safe_execute(notion.blocks.children.append, block_id, children=children)
+    if not children or not isinstance(children, list):
+        return {"successful": False, "error": "children must be a non-empty list of block objects"}
+    
+    return safe_execute(
+        notion.blocks.children.append,
+        parent_id,
+        children=children
+    )
+
 
 @mcp.tool()
 def update_block(block_id: str, fields: dict):
     """
     Update a block (e.g., change paragraph text).
-    Example fields:
-    {
-      "paragraph": {
-        "rich_text": [
-          {"type": "text", "text": {"content": "Updated content"}}
-        ]
-      }
-    }
+
     """
     return safe_execute(notion.blocks.update, block_id, **fields)
 
@@ -241,48 +234,13 @@ def delete_block(block_id: str):
     """
     return safe_execute(notion.blocks.delete, block_id)
 
-@mcp.tool()
-def append_block(page_id: str, block_type: str, content: str, checked: bool = False) -> Dict[str, Any]:
-    """
-    Append a block to a Notion page or database row (since rows are pages too).
-    
-    Args:
-        page_id (str): The page or row ID where the block should be added.
-        block_type (str): The type of block ("paragraph", "to_do", "heading_1", etc.).
-        content (str): The text content to insert.
-        checked (bool, optional): For to_do blocks, whether it's checked. Defaults to False.
-
-    Returns:
-        dict: API response from Notion
-    """
-    block = {
-        "object": "block",
-        "type": block_type,
-        block_type: {
-            "rich_text": [
-                {"type": "text", "text": {"content": content}}
-            ]
-        }
-    }
-
-    # Add "checked" if it's a to_do block
-    if block_type == "to_do":
-        block[block_type]["checked"] = checked
-
-    return safe_execute(
-        notion.blocks.children.append,
-        block_id=page_id,
-        children=[block]
-    )
+# ==================================================
+# Getting ID's
+# ==================================================
 @mcp.tool()
 def get_all_ids_from_name(name: str, max_depth: int = 3):
     """
     Given a Notion page or database name, fetch all related IDs:
-    - Page ID or Database ID
-    - Parent ID
-    - Child Block IDs
-    - Row/Page IDs inside database
-    - Comment IDs + Discussion IDs
     """
 
     # Step 1: Search for matching page or database
@@ -363,55 +321,6 @@ def get_all_ids_from_name(name: str, max_depth: int = 3):
                 result["rows"].append(row_entry)
 
     return {"successful": True, "data": result, "error": ""}
-@mcp.tool()
-def add_block(parent_id: str, block_type: str, content: str = "", checked: bool = False, children: list = None):
-    """
-    Append a block of any type to a page or another block.
-    
-    Args:
-        parent_id (str): ID of the page or block where the block will be appended.
-        block_type (str): Type of block (paragraph, heading_1, heading_2, heading_3, to_do, bulleted_list_item, numbered_list_item, quote, callout, toggle, etc.).
-        content (str): The text content (if required by the block type).
-        checked (bool): For to_do blocks, whether it is checked.
-        children (list): Optional nested blocks.
-    """
-
-    block = {
-        "object": "block",
-        "type": block_type
-    }
-
-    # Handle text-based blocks
-    if block_type in ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "callout", "toggle"]:
-        block[block_type] = {
-            "rich_text": [{"type": "text", "text": {"content": content}}],
-        }
-        if children:
-            block[block_type]["children"] = children
-
-    # Special handling for to_do
-    elif block_type == "to_do":
-        block["to_do"] = {
-            "rich_text": [{"type": "text", "text": {"content": content}}],
-            "checked": checked
-        }
-        if children:
-            block["to_do"]["children"] = children
-
-    # Media blocks (example: image, video, file, etc.)
-    elif block_type in ["image", "video", "file", "pdf", "bookmark"]:
-        block[block_type] = {
-            "external": {"url": content}
-        }
-
-    else:
-        return {"successful": False, "error": f"Unsupported block type: {block_type}"}
-
-    return safe_execute(
-        notion.blocks.children.append,
-        parent_id,
-        children=[block]
-    )
 
 # ==================================================
 # RUN SERVER
