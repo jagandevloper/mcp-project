@@ -1,10 +1,9 @@
 import os
-from dotenv import load_dotenv
 from notion_client import Client, APIResponseError
 from mcp.server.fastmcp import FastMCP
 from typing import Dict, Any
 # ---------- Load environment ----------
-load_dotenv()
+
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 
 if not NOTION_API_KEY:
@@ -327,3 +326,4 @@ def get_all_ids_from_name(name: str, max_depth: int = 3):
 # ==================================================
 if __name__ == "__main__":
     mcp.run()
+
