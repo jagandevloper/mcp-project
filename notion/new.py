@@ -1,647 +1,621 @@
+# production_notional_mcp.py
 import os
-import time
+import re
+import asyncio
 import logging
-from dotenv import load_dotenv
-from notion_client import Client, APIResponseError
+from typing import Optional, Dict, Any, List
+from notion_client import Client
 from mcp.server.fastmcp import FastMCP
-from functools import wraps
-# ---------- Logging Setup ----------
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
-# ---------- Load environment ----------
-load_dotenv()
-NOTION_API_KEY = os.getenv("NOTION_API_KEY")
+# ---------------- CONFIG ----------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("notion_mcp")
 
-if not NOTION_API_KEY:
-    logger.error("Missing NOTION_API_KEY in .env")
-    raise ValueError("Missing NOTION_API_KEY in .env")
+mcp = FastMCP("notion-mcp")
 
-try:
-    notion = Client(auth=NOTION_API_KEY)
-    logger.info("Notion client initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize Notion client: {e}")
-    raise
+# Use environment variable in production. If you keep a literal for testing, replace below.
+NOTION_TOKEN = os.getenv("NOTION_TOKEN") or "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"
+if not NOTION_TOKEN:
+    raise RuntimeError("❌ Please set NOTION_TOKEN in environment variables.")
 
-mcp = FastMCP("notion-user-mcp-server")
+notion = Client(auth=NOTION_TOKEN)
+
+# ---------------- HELPERS ----------------
+_UUID_RE = re.compile(r"^[0-9a-fA-F-]{32,36}$")
 
 
-# ---------- Rate Limiting ----------
-class RateLimiter:
-    def __init__(self, max_calls=3, time_window=1):
-        self.max_calls = max_calls
-        self.time_window = time_window
-        self.calls = []
-    
-    def __call__(self, func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            now = time.time()
-            # Remove old calls outside the time window
-            self.calls[:] = [call_time for call_time in self.calls if now - call_time < self.time_window]
-            
-            # If we've hit the rate limit, wait
-            if len(self.calls) >= self.max_calls:
-                sleep_time = self.time_window - (now - self.calls[0])
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-            
-            # Record this call
-            self.calls.append(time.time())
-            return func(*args, **kwargs)
-        return wrapper
-
-# Global rate limiter instance
-rate_limiter = RateLimiter(max_calls=3, time_window=1)
-
-# ---------- Enhanced Error Handling ----------
-class NotionError(Exception):
-    """Custom exception for Notion-specific errors"""
-    def __init__(self, message: str, error_code: str = None, details: dict = None):
-        self.message = message
-        self.error_code = error_code
-        self.details = details or {}
-        super().__init__(self.message)
-
-def validate_notion_id(obj_id: str, obj_type: str = "object") -> bool:
-    """Validate Notion object ID format"""
-    if not obj_id or not isinstance(obj_id, str):
+def validate_notion_id(notion_id: str) -> bool:
+    if not notion_id or not isinstance(notion_id, str):
         return False
-    # Notion IDs are 32 characters with hyphens
-    return len(obj_id) == 36 and obj_id.count('-') == 4
+    return bool(_UUID_RE.match(notion_id))
 
-def validate_required_params(params: dict, required: list) -> None:
-    """Validate required parameters"""
-    missing = [param for param in required if not params.get(param)]
-    if missing:
-        raise ValueError(f"Missing required parameters: {', '.join(missing)}")
 
-# ---------- Helper ----------
-@rate_limiter
+def _func_name(func) -> str:
+    # Some Notion client endpoints are bound objects without __name__
+    return getattr(func, "__name__", getattr(func, "__qualname__", func.__class__.__name__))
+
+
 def safe_execute(func, *args, **kwargs):
-    """Enhanced safe execution with detailed error handling and logging"""
-    func_name = func.__name__ if hasattr(func, '__name__') else str(func)
-    
+    """
+    Calls Notion client endpoint or a function and returns structured JSON.
+    Works when `func` is a bound endpoint object (no __name__).
+    """
     try:
-        logger.debug(f"Executing {func_name} with args: {args}, kwargs: {kwargs}")
         data = func(*args, **kwargs)
-        logger.debug(f"Successfully executed {func_name}")
-        return {"successful": True, "data": data, "error": ""}
-    
-    except APIResponseError as e:
-        error_msg = f"Notion API error in {func_name}: {str(e)}"
-        logger.error(error_msg)
-        
-        # Parse error details
-        error_details = {
-            "type": "API_ERROR",
-            "function": func_name,
-            "status_code": getattr(e, 'status', None),
-            "error_code": getattr(e, 'code', None),
-            "message": str(e)
-        }
-        
-        return {
-            "successful": False, 
-            "data": {}, 
-            "error": error_msg,
-            "error_details": error_details
-        }
-    
-    except ValueError as e:
-        error_msg = f"Validation error in {func_name}: {str(e)}"
-        logger.warning(error_msg)
-        return {
-            "successful": False, 
-            "data": {}, 
-            "error": error_msg,
-            "error_type": "VALIDATION_ERROR"
-        }
-    
+        logger.info("✅ Success calling %s", _func_name(func))
+        return {"successful": True, "data": data, "error": None}
     except Exception as e:
-        error_msg = f"Unexpected error in {func_name}: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {
-            "successful": False, 
-            "data": {}, 
-            "error": error_msg,
-            "error_type": "UNEXPECTED_ERROR"
-        }
+        logger.exception("❌ Error calling %s", _func_name(func))
+        return {"successful": False, "data": {}, "error": str(e)}
 
 
-# ==================================================
-# USER TOOLS
-# ==================================================
+def _collect_all_pages_query(database_id: str, page_size: int = 100) -> Dict[str, Any]:
+    """
+    Helper to collect all pages from databases.query with pagination.
+    Returns dict with results list and next_cursor (None if done).
+    """
+    all_results = []
+    start_cursor = None
+    while True:
+        kwargs = {"database_id": database_id, "page_size": page_size}
+        if start_cursor:
+            kwargs["start_cursor"] = start_cursor
+        res = safe_execute(lambda **kw: notion.databases.query(**kw), **kwargs)
+        if not res["successful"]:
+            return res
+        page_data = res["data"]
+        all_results.extend(page_data.get("results", []))
+        start_cursor = page_data.get("next_cursor")
+        if not start_cursor:
+            break
+    return {"successful": True, "data": {"results": all_results}, "error": None}
+
+
+def _collect_all_blocks(block_id: str, page_size: int = 100) -> Dict[str, Any]:
+    """Collect all children blocks for a block/page with pagination."""
+    all_results = []
+    start_cursor = None
+    while True:
+        kwargs = {"block_id": block_id, "page_size": page_size}
+        if start_cursor:
+            kwargs["start_cursor"] = start_cursor
+        res = safe_execute(lambda **kw: notion.blocks.children.list(**kw), **kwargs)
+        if not res["successful"]:
+            return res
+        all_results.extend(res["data"].get("results", []))
+        start_cursor = res["data"].get("next_cursor")
+        if not start_cursor:
+            break
+    return {"successful": True, "data": {"results": all_results}, "error": None}
+
+
+# ---------------- USER TOOLS ----------------
+@mcp.tool()
+def NOTION_GET_ABOUT_ME():
+    return safe_execute(lambda **kw: notion.users.me(**kw))
+
 
 @mcp.tool()
-def get_about_me():
-    """ Get details of the user """
-    return safe_execute(notion.users.me)
-
-
-@mcp.tool()
-def list_users():
-    """List all users (id + name) """
-    res = safe_execute(notion.users.list)
+def NOTION_LIST_USERS(page_size: int = 30, start_cursor: Optional[str] = None):
+    kwargs = {"page_size": page_size}
+    if start_cursor:
+        kwargs["start_cursor"] = start_cursor
+    res = safe_execute(lambda **kw: notion.users.list(**kw), **kwargs)
     if res["successful"]:
-        simplified = [{"id": u["id"], "name": u.get("name", "Unknown")}
-                      for u in res["data"].get("results", [])]
+        simplified = [{"id": u.get("id"), "name": u.get("name", "Unknown")} for u in res["data"].get("results", [])]
         res["data"] = simplified
     return res
 
 
 @mcp.tool()
-def retrieve_user(user_id: str):
-    """ Retrieve full information about a specific user. """
+def NOTION_GET_ABOUT_USER(user_id: str):
     if not validate_notion_id(user_id):
         return {"successful": False, "data": {}, "error": "Invalid user ID format"}
-    
-    return safe_execute(notion.users.retrieve, user_id)
+    return safe_execute(lambda **kw: notion.users.retrieve(**kw), user_id=user_id)
 
-# ==================================================
-# DATABASE TOOLS
-# ==================================================
-@mcp.tool()
-def list_databases():
-    """List all databases with id and title."""
-    res = safe_execute(notion.search, filter={"property": "object", "value": "database"})
-    if res["successful"]:
-        simplified = [
-            {"id": db["id"], "title": "".join([t.get("plain_text", "") for t in db.get("title", [])]) if db.get("title") else "Untitled"}
-            for db in res["data"].get("results", [])
-        ]
-        res["data"] = simplified
-    return res
 
+# ---------------- PAGE / DUPLICATE / UPDATE TOOLS ----------------
 @mcp.tool()
-def retrieve_database(database_id: str):
-    """Get full details of a database (properties, title, parent)."""
-    if not validate_notion_id(database_id):
-        return {"successful": False, "data": {}, "error": "Invalid database ID format"}
-    
-    return safe_execute(notion.databases.retrieve, database_id)
+def NOTION_CREATE_NOTION_PAGE(parent_id: str, title: str, cover: Optional[str] = None, icon: Optional[str] = None):
+    if not validate_notion_id(parent_id):
+        return {"successful": False, "data": {}, "error": "Invalid parent ID format"}
+    kwargs = {
+        "parent": {"page_id": parent_id},
+        "properties": {"title": {"title": [{"text": {"content": title}}]}},
+    }
+    if cover:
+        kwargs["cover"] = {"external": {"url": cover}}
+    if icon:
+        kwargs["icon"] = {"emoji": icon}
+    return safe_execute(lambda **kw: notion.pages.create(**kw), **kwargs)
+
 
 @mcp.tool()
-def create_database(parent_page_id: str, title: str, properties: dict):
-    """Create a new database under a parent page."""
-    # Input validation
-    if not validate_notion_id(parent_page_id):
-        return {"successful": False, "data": {}, "error": "Invalid parent page ID format"}
-    
-    if not title or not isinstance(title, str):
-        return {"successful": False, "data": {}, "error": "Title must be a non-empty string"}
-    
-    if not isinstance(properties, dict):
-        return {"successful": False, "data": {}, "error": "Properties must be a dictionary"}
-    
-    # Ensure Name property exists
-    if "Name" not in properties:
-        properties["Name"] = {"title": {}}
-    
-    return safe_execute(
-        notion.databases.create,
-        parent={"page_id": parent_page_id},
-        title=[{"text": {"content": title}}],
-        properties=properties
-    )
+def NOTION_DUPLICATE_PAGE(page_id: str, parent_id: str, title: Optional[str] = None, include_blocks: bool = True):
+    if not validate_notion_id(page_id) or not validate_notion_id(parent_id):
+        return {"successful": False, "data": {}, "error": "Invalid page_id or parent_id format"}
 
-@mcp.tool()
-def update_database(database_id: str, title: str = None, properties: dict = None):
-    """Update a database with a new title or properties"""
-    args = {}
-    if title:
-        args["title"] = [{"text": {"content": title}}]
-    if properties:
-        args["properties"] = properties
-    return safe_execute(notion.databases.update, database_id, **args)
+    # fetch original page metadata
+    orig_res = safe_execute(lambda **kw: notion.pages.retrieve(**kw), page_id=page_id)
+    if not orig_res["successful"]:
+        return orig_res
+    original = orig_res["data"]
 
-@mcp.tool()
-def query_database(database_id: str, filter: dict = None, sorts: list = None, page_size: int = 100):
-    """Query row  from a database """
-    args = {"database_id": database_id, "page_size": page_size}
-    
-    # Only add filter/sorts if they are provided
-    if filter and isinstance(filter, dict) and filter != {}:
-        args["filter"] = filter
-    if sorts and isinstance(sorts, list) and len(sorts) > 0:
-        args["sorts"] = sorts
-
-    return safe_execute(notion.databases.query, **args)
-# ==================================================
-# PAGE TOOLS
-# ==================================================
-@mcp.tool()
-def create_page(parent_id: str, title: str, icon: str = None, cover: str = None):
-    """Create a page under parent page or database."""
+    # extract a reasonable title
+    orig_title = "Untitled"
     try:
-        notion.databases.retrieve(parent_id)
-        is_database = True
-    except APIResponseError:
-        is_database = False
+        t_prop = original.get("properties", {})
+        # find any title property key whose value contains 'title'
+        for k, v in t_prop.items():
+            if isinstance(v, dict) and "title" in v:
+                title_parts = v.get("title", [])
+                orig_title = "".join([p.get("plain_text", "") for p in title_parts]) or orig_title
+                break
+    except Exception:
+        pass
 
-    if is_database:
-        properties = {"Name": {"title": [{"text": {"content": title}}]}}
-        return safe_execute(notion.pages.create,
-                            parent={"database_id": parent_id},
-                            properties=properties,
-                            icon={"emoji": icon} if icon else None,
-                            cover={"external": {"url": cover}} if cover else None)
+    new_title = title or f"Copy of {orig_title}"
+
+    # prepare properties copy - deep copy safe; but remove system-only fields if present
+    new_properties = original.get("properties", {}).copy()
+    # Ensure title property updated
+    # find the title property key to overwrite (first property whose value has 'title')
+    title_key = None
+    for k, v in new_properties.items():
+        if isinstance(v, dict) and "title" in v:
+            title_key = k
+            break
+    if title_key:
+        new_properties[title_key] = {"title": [{"text": {"content": new_title}}]}
     else:
-        return safe_execute(notion.pages.create,
-                            parent={"page_id": parent_id},
-                            properties={},
-                            icon={"emoji": icon} if icon else None,
-                            cover={"external": {"url": cover}} if cover else None,
-                            children=[{"object": "block",
-                                       "type": "heading_1",
-                                       "heading_1": {"rich_text": [{"text": {"content": title}}]}}])
+        # If no title property exists (edge), add a 'Name' title property
+        new_properties["Name"] = {"title": [{"text": {"content": new_title}}]}
+
+    create_payload = {"parent": {"page_id": parent_id}, "properties": new_properties}
+    if original.get("cover"):
+        create_payload["cover"] = original["cover"]
+    if original.get("icon"):
+        create_payload["icon"] = original["icon"]
+
+    new_page_res = safe_execute(lambda **kw: notion.pages.create(**kw), **create_payload)
+    if not new_page_res["successful"]:
+        return new_page_res
+
+    new_page_id = new_page_res["data"]["id"]
+
+    # copy blocks optionally (recursive shallow copy)
+    if include_blocks:
+        blocks_collected = _collect_all_blocks(page_id := page_id)
+        if not blocks_collected["successful"]:
+            logger.warning("Failed to collect blocks for duplication, continuing without blocks.")
+        else:
+            for blk in blocks_collected["data"].get("results", []):
+                # Remove read-only fields and keep only the block payload
+                blk_payload = {k: v for k, v in blk.items() if k not in ("id", "created_time", "last_edited_time", "created_by", "last_edited_by", "parent", "object")}
+                # append
+                try:
+                    safe_execute(lambda **kw: notion.blocks.children.append(**kw), block_id=new_page_id, children=[blk_payload])
+                except Exception as e:
+                    logger.warning("Failed to append block during duplication: %s", e)
+
+    return {"successful": True, "data": {"new_page_id": new_page_id, "title": new_title}, "error": None}
+
 
 @mcp.tool()
-def retrieve_page(page_id: str):
-    """Get all properties of a page."""
-    return safe_execute(notion.pages.retrieve, page_id)
+def NOTION_UPDATE_PAGE(page_id: str, title: Optional[str] = None, archived: Optional[bool] = None,
+                       cover_url: Optional[str] = None, icon_emoji: Optional[str] = None, properties: Optional[Dict[str, Any]] = None):
+    if not validate_notion_id(page_id):
+        return {"successful": False, "data": {}, "error": "Invalid page_id format"}
+    kwargs = {}
+    if archived is not None:
+        kwargs["archived"] = archived
+    if cover_url:
+        kwargs["cover"] = {"external": {"url": cover_url}}
+    if icon_emoji:
+        kwargs["icon"] = {"emoji": icon_emoji}
+    if title:
+        kwargs.setdefault("properties", {})
+        # find title property name first by retrieving the page schema
+        page_meta = safe_execute(lambda **kw: notion.pages.retrieve(**kw), page_id=page_id)
+        if page_meta["successful"]:
+            page_props = page_meta["data"].get("properties", {})
+            title_key = None
+            for k, v in page_props.items():
+                if isinstance(v, dict) and "title" in v:
+                    title_key = k
+                    break
+            if title_key:
+                kwargs["properties"][title_key] = {"title": [{"text": {"content": title}}]}
+            else:
+                # fallback: set property "Name"
+                kwargs["properties"]["Name"] = {"title": [{"text": {"content": title}}]}
+        else:
+            # can't inspect page; still set a 'title' property named 'Name'
+            kwargs.setdefault("properties", {})
+            kwargs["properties"]["Name"] = {"title": [{"text": {"content": title}}]}
+    if properties:
+        kwargs.setdefault("properties", {})
+        kwargs["properties"].update(properties)
+    return safe_execute(lambda **kw: notion.pages.update(**kw), page_id=page_id, **kwargs)
+
 
 @mcp.tool()
-def update_page(page_id: str, properties: dict = None, icon: str = None, cover: str = None):
-    return safe_execute(notion.pages.update,
-                        page_id,
-                        properties=properties or {},
-                        icon={"emoji": icon} if icon else None,
-                        cover={"external": {"url": cover}} if cover else None)
+def NOTION_GET_PAGE_PROPERTY_ACTION(page_id: str, property_id: str, page_size: Optional[int] = None, start_cursor: Optional[str] = None):
+    if not validate_notion_id(page_id):
+        return {"successful": False, "data": {}, "error": "Invalid page_id format"}
+    kwargs = {"page_id": page_id, "property_id": property_id}
+    if page_size:
+        kwargs["page_size"] = page_size
+    if start_cursor:
+        kwargs["start_cursor"] = start_cursor
+    return safe_execute(lambda **kw: notion.pages.properties.retrieve(**kw), **kwargs)
 
 
 @mcp.tool()
-def archive_page(page_id: str, archive: bool = True):
-    return safe_execute(notion.pages.update, page_id, archived=archive)
+def NOTION_ARCHIVE_NOTION_PAGE(page_id: str, archive: bool = True):
+    if not validate_notion_id(page_id):
+        return {"successful": False, "data": {}, "error": "Invalid page_id format"}
+    return safe_execute(lambda **kw: notion.pages.update(**kw), page_id=page_id, archived=archive)
+
 
 @mcp.tool()
-def duplicate_page(page_id: str, parent_id: str, new_title: str):
-    content_res = safe_execute(notion.blocks.children.list, page_id)
-    if not content_res["successful"]:
-        return content_res
-
-    return safe_execute(notion.pages.create,
-                        parent={"page_id": parent_id},
-                        properties={"Name": {"title": [{"text": {"content": new_title}}]}},
-                        children=content_res["data"].get("results", []))
-@mcp.tool()
-def list_pages(keyword: str = None):
-    res = safe_execute(notion.search, filter={"property": "object", "value": "page"})
+def list_pages(keyword: Optional[str] = None):
+    search_kwargs = {"filter": {"property": "object", "value": "page"}}
+    if keyword:
+        search_kwargs["query"] = keyword
+    res = safe_execute(lambda **kw: notion.search(**kw), **search_kwargs)
     if not res["successful"]:
         return res
-
     pages = []
     for pg in res["data"].get("results", []):
         title = "Untitled"
         try:
-            # Fix: Safe property access with proper error handling
-            if "properties" in pg and "Name" in pg["properties"]:
-                name_prop = pg["properties"]["Name"]
-                if "title" in name_prop and name_prop["title"]:
-                    title = "".join([t["plain_text"] for t in name_prop["title"]])
-        except (KeyError, TypeError, AttributeError):
+            props = pg.get("properties", {})
+            # find first title prop
+            for k, v in props.items():
+                if isinstance(v, dict) and "title" in v:
+                    title = "".join([t.get("plain_text", "") for t in v.get("title", [])]) or title
+                    break
+        except Exception:
             pass
-        
-        if not keyword or keyword.lower() in title.lower():
-            pages.append({"id": pg["id"], "title": title, "url": pg.get("url")})
+        pages.append({"id": pg.get("id"), "title": title, "url": pg.get("url")})
     return {"successful": True, "data": pages, "error": ""}
 
-# ==================================================
-# COMMENTS TOOLS
-# ==================================================
 
+# ---------------- DATABASE TOOLS ----------------
 @mcp.tool()
-def create_comment(page_id: str, text: str, block_id: str = None):
-    """
-    Create a comment on a page or specific block.
-    - page_id: ID of the page to comment on
-    - text: Comment text content
-    - block_id: Optional specific block ID to comment on
-    """
-    parent = {"page_id": page_id}
-    if block_id:
-        parent = {"block_id": block_id}
-    
-    return safe_execute(
-        notion.comments.create,
-        parent=parent,
-        rich_text=[{"text": {"content": text}}]
-    )
-
-@mcp.tool()
-def list_comments(block_id: str, page_size: int = 50):
-    """
-    List all comments on a page or block.
-    - block_id: ID of the page or block to get comments for
-    - page_size: Number of comments to retrieve (max 100)
-    """
-    return safe_execute(notion.comments.list, block_id=block_id, page_size=page_size)
-
-@mcp.tool()
-def retrieve_comment(comment_id: str):
-    """
-    Retrieve a specific comment by ID.
-    - comment_id: ID of the comment to retrieve
-    """
-    return safe_execute(notion.comments.retrieve, comment_id)
-
-# ==================================================
-# BLOCK TOOLS
-# ==================================================
-@mcp.tool()
-def retrieve_block(block_id: str):
-    """
-    Retrieve a block by ID.
-    """
-    return safe_execute(notion.blocks.retrieve, block_id)
-
-@mcp.tool()
-def list_block_children(block_id: str, page_size: int = 50):
-    """
-    List children (nested blocks) of a block or page.
-    """
-    return safe_execute(notion.blocks.children.list, block_id, page_size=page_size)
-
-@mcp.tool()
-def append_block(parent_id: str, children: list):
-    """
-    Append one or more blocks to a page or block.
-    
-    """
-    if not children or not isinstance(children, list):
-        return {"successful": False, "error": "children must be a non-empty list of block objects"}
-    
-    return safe_execute(
-        notion.blocks.children.append,
-        parent_id,
-        children=children
-    )
+def NOTION_CREATE_DATABASE(parent_id: str, title: str, properties: Dict[str, Any]):
+    if not validate_notion_id(parent_id):
+        return {"successful": False, "data": {}, "error": "Invalid parent_id format"}
+    # require at least one title prop in properties values
+    if not any(isinstance(v, dict) and "title" in v for v in properties.values()):
+        return {"successful": False, "data": {}, "error": "Database must have at least one title property"}
+    payload = {"parent": {"type": "page_id", "page_id": parent_id}, "title": [{"type": "text", "text": {"content": title}}], "properties": properties}
+    return safe_execute(lambda **kw: notion.databases.create(**kw), **payload)
 
 
 @mcp.tool()
-def update_block(block_id: str, fields: dict):
-    """
-    Update a block (e.g., change paragraph text).
+def NOTION_INSERT_ROW_DATABASE(database_id: str, properties: Dict[str, Any], icon: Optional[str] = None, cover: Optional[str] = None, children: Optional[List[Dict[str, Any]]] = None):
+    if not validate_notion_id(database_id):
+        return {"successful": False, "data": {}, "error": "Invalid database_id format"}
+    payload = {"parent": {"database_id": database_id}, "properties": properties}
+    if icon:
+        payload["icon"] = {"emoji": icon}
+    if cover:
+        payload["cover"] = {"external": {"url": cover}}
+    if children:
+        payload["children"] = children
+    return safe_execute(lambda **kw: notion.pages.create(**kw), **payload)
 
-    """
-    return safe_execute(notion.blocks.update, block_id, **fields)
 
 @mcp.tool()
-def delete_block(block_id: str):
-    """
-    Delete (archive) a block, page, or database by ID.
-    """
-    return safe_execute(notion.blocks.delete, block_id)
+def NOTION_QUERY_DATABASE(database_id: str, page_size: int = 10, sorts: Optional[List[Dict[str, Any]]] = None, start_cursor: Optional[str] = None):
+    if not validate_notion_id(database_id):
+        return {"successful": False, "data": {}, "error": "Invalid database_id format"}
+    payload = {"page_size": page_size}
+    if sorts:
+        payload["sorts"] = [{"property": s["property"], "direction": s.get("direction", "ascending")} for s in sorts]
+    if start_cursor:
+        payload["start_cursor"] = start_cursor
+    return safe_execute(lambda **kw: notion.databases.query(**kw), database_id=database_id, **payload)
+
+
 @mcp.tool()
-def get_all_ids_from_name(name: str, max_depth: int = 3):
-    """
-    Given a Notion page or database name, fetch all related IDs:
-    """
+def NOTION_FETCH_DATABASE(database_id: str):
+    if not validate_notion_id(database_id):
+        return {"successful": False, "data": {}, "error": "Invalid database_id format"}
+    return safe_execute(lambda **kw: notion.databases.retrieve(**kw), database_id=database_id)
 
-    # Step 1: Search for matching page or database
-    search_res = safe_execute(notion.search, query=name)
-    if not search_res["successful"]:
-        return search_res
 
-    results = search_res["data"].get("results", [])
+@mcp.tool()
+def NOTION_FETCH_ROW(page_id: str):
+    if not validate_notion_id(page_id):
+        return {"successful": False, "data": {}, "error": "Invalid page_id format"}
+    return safe_execute(lambda **kw: notion.pages.retrieve(**kw), page_id=page_id)
+
+
+@mcp.tool()
+def NOTION_UPDATE_ROW_DATABASE(page_id: str, properties: Optional[Dict[str, Any]] = None, icon: Optional[str] = None, cover: Optional[str] = None, archived: Optional[bool] = False):
+    if not validate_notion_id(page_id):
+        return {"successful": False, "data": {}, "error": "Invalid page_id format"}
+    payload = {}
+    if properties:
+        payload["properties"] = properties
+    if icon:
+        payload["icon"] = {"emoji": icon}
+    if cover:
+        payload["cover"] = {"external": {"url": cover}}
+    if archived is not None:
+        payload["archived"] = archived
+    return safe_execute(lambda **kw: notion.pages.update(**kw), page_id=page_id, **payload)
+
+
+@mcp.tool()
+def NOTION_UPDATE_SCHEMA_DATABASE(database_id: str, title: Optional[str] = None, description: Optional[str] = None, properties: Optional[Dict[str, Any]] = None):
+    if not validate_notion_id(database_id):
+        return {"successful": False, "data": {}, "error": "Invalid database_id format"}
+    payload = {}
+    if title:
+        payload["title"] = [{"type": "text", "text": {"content": title}}]
+    if description:
+        payload["description"] = [{"type": "text", "text": {"content": description}}]
+    if properties:
+        payload["properties"] = properties
+    return safe_execute(lambda **kw: notion.databases.update(**kw), database_id=database_id, **payload)
+
+
+# ---------------- BLOCK TOOLS ----------------
+def markdown_to_rich_text(content: str) -> List[Dict[str, Any]]:
+    # Minimal conversion: returns single text rich_text item. Extend as needed.
+    return [{"type": "text", "text": {"content": content}}]
+
+
+@mcp.tool()
+def NOTION_ADD_MULTIPLE_PAGE_CONTENT(parent_block_id: str, content_blocks: List[Dict[str, Any]], after: Optional[str] = None):
+    if not validate_notion_id(parent_block_id):
+        return {"successful": False, "data": {}, "error": "Invalid parent_block_id"}
+    if not isinstance(content_blocks, list) or len(content_blocks) == 0:
+        return {"successful": False, "data": {}, "error": "content_blocks must be a non-empty list"}
+    if len(content_blocks) > 100:
+        return {"successful": False, "data": {}, "error": "Maximum 100 blocks per request"}
+
+    parsed_blocks = []
+    for block in content_blocks:
+        if isinstance(block, dict) and block.get("object") == "block":
+            parsed_blocks.append(block)
+        elif isinstance(block, dict) and "content" in block:
+            parsed_blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": markdown_to_rich_text(block["content"])}})
+        else:
+            return {"successful": False, "data": {}, "error": f"Invalid block format: {block}"}
+
+    payload = {"children": parsed_blocks}
+    if after is not None:
+        payload["after"] = after
+    return safe_execute(lambda **kw: notion.blocks.children.append(**kw), block_id=parent_block_id, **payload)
+
+
+@mcp.tool()
+def NOTION_ADD_PAGE_CONTENT(parent_block_id: str, content_block: Dict[str, Any], after: Optional[str] = None):
+    if not validate_notion_id(parent_block_id):
+        return {"successful": False, "data": {}, "error": "Invalid parent_block_id"}
+    if not isinstance(content_block, dict):
+        return {"successful": False, "data": {}, "error": "content_block must be an object"}
+    payload = {"children": [content_block]}
+    if after is not None:
+        payload["after"] = after
+    return safe_execute(lambda **kw: notion.blocks.children.append(**kw), block_id=parent_block_id, **payload)
+
+
+@mcp.tool()
+def NOTION_APPEND_BLOCK_CHILDREN(block_id: str, children: List[Dict[str, Any]], after: Optional[str] = None):
+    if not validate_notion_id(block_id):
+        return {"successful": False, "data": {}, "error": "Invalid block_id"}
+    if not isinstance(children, list) or len(children) == 0:
+        return {"successful": False, "data": {}, "error": "children must be a non-empty list"}
+    if len(children) > 100:
+        return {"successful": False, "data": {}, "error": "Maximum 100 blocks per request"}
+    payload = {"children": children}
+    if after is not None:
+        payload["after"] = after
+    return safe_execute(lambda **kw: notion.blocks.children.append(**kw), block_id=block_id, **payload)
+
+
+@mcp.tool()
+def NOTION_UPDATE_BLOCK(block_id: str, block_type: str, content: str, additional_properties: Optional[Dict[str, Any]] = None):
+    if not validate_notion_id(block_id):
+        return {"successful": False, "data": {}, "error": "Invalid block_id"}
+    # For text-like blocks we populate the type's rich_text or text key depending on type.
+    # Caller should pass appropriate block_type and additional_properties when needed.
+    block_payload = {}
+    # Common mapping for text-based blocks
+    if block_type in ("paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote"):
+        # Notion expects e.g. {"paragraph": {"rich_text": [...], **additional_properties}}
+        block_payload[block_type] = {"rich_text": markdown_to_rich_text(content)}
+        if additional_properties:
+            block_payload[block_type].update(additional_properties)
+    elif block_type == "to_do":
+        block_payload["to_do"] = {"rich_text": markdown_to_rich_text(content)}
+        if additional_properties:
+            block_payload["to_do"].update(additional_properties)
+    else:
+        # For other block types, allow caller to provide the payload via additional_properties
+        if not additional_properties:
+            return {"successful": False, "data": {}, "error": f"Unsupported block_type '{block_type}' without additional_properties"}
+        block_payload[block_type] = additional_properties
+
+    return safe_execute(lambda **kw: notion.blocks.update(**kw), block_id=block_id, **block_payload)
+
+
+@mcp.tool()
+def NOTION_DELETE_BLOCK(block_id: str):
+    if not validate_notion_id(block_id):
+        return {"successful": False, "data": {}, "error": "Invalid block_id"}
+    return safe_execute(lambda **kw: notion.blocks.update(**kw), block_id=block_id, archived=True)
+
+
+@mcp.tool()
+def NOTION_FETCH_BLOCK_CONTENTS(block_id: str, page_size: Optional[int] = None, start_cursor: Optional[str] = None):
+    if not validate_notion_id(block_id):
+        return {"successful": False, "data": {}, "error": "Invalid block_id"}
+    kwargs = {"block_id": block_id}
+    if page_size:
+        kwargs["page_size"] = page_size
+    if start_cursor:
+        kwargs["start_cursor"] = start_cursor
+    return safe_execute(lambda **kw: notion.blocks.children.list(**kw), **kwargs)
+
+
+@mcp.tool()
+def NOTION_FETCH_BLOCK_METADATA(block_id: str):
+    if not validate_notion_id(block_id):
+        return {"successful": False, "data": {}, "error": "Invalid block_id"}
+    return safe_execute(lambda **kw: notion.blocks.retrieve(**kw), block_id=block_id)
+
+
+@mcp.tool()
+def mcp_notion_get_all_ids_from_name(name: str, max_depth: int = 3):
+    if not name or not isinstance(name, str):
+        return {"successful": False, "data": {}, "error": "name is required"}
+    res = safe_execute(lambda **kw: notion.search(**kw), query=name)
+    if not res["successful"]:
+        return res
+    results = res["data"].get("results", [])
     if not results:
         return {"successful": False, "data": {}, "error": f"No match found for '{name}'"}
-
-    # Take first match
     target = results[0]
-    obj_type = target["object"]
-    obj_id = target["id"]
-
-    result = {
-        "object_type": obj_type,
-        "id": obj_id,
-        "parent": target.get("parent", {}),
-        "blocks": [],
-        "rows": [],
-        "comments": []
-    }
-
-    # Extract title if possible
+    obj_type = target.get("object")
+    obj_id = target.get("id")
+    result: Dict[str, Any] = {"object_type": obj_type, "id": obj_id, "parent": target.get("parent", {}), "blocks": [], "rows": [], "comments": []}
+    # extract title
     if obj_type == "page":
         try:
-            result["title"] = target["properties"]["Name"]["title"][0]["plain_text"]
+            for k, v in target.get("properties", {}).items():
+                if isinstance(v, dict) and "title" in v:
+                    result["title"] = "".join([t.get("plain_text", "") for t in v.get("title", [])]) or "Untitled"
+                    break
         except Exception:
             result["title"] = "Untitled"
     elif obj_type == "database":
         title = target.get("title", [])
-        result["title"] = title[0]["plain_text"] if title else "Untitled"
-
-    # Step 2: If page → fetch blocks + comments
+        result["title"] = title[0].get("plain_text", "Untitled") if title else "Untitled"
+    # blocks & comments
     if obj_type == "page":
-
-        def fetch_blocks_recursive(block_id, depth):
-            blocks_res = safe_execute(notion.blocks.children.list, block_id, page_size=50)
-            if not blocks_res["successful"]:
-                return []
-
-            collected = []
-            for blk in blocks_res["data"].get("results", []):
-                blk_entry = {
-                    "id": blk["id"],
-                    "type": blk["type"],
-                    "has_children": blk.get("has_children", False),
-                    "children": []
-                }
-                if blk.get("has_children") and depth < max_depth:
-                    blk_entry["children"] = fetch_blocks_recursive(blk["id"], depth + 1)
-                collected.append(blk_entry)
-            return collected
-
-        result["blocks"] = fetch_blocks_recursive(obj_id, 1)
-
-        # Comments
-        comments_res = safe_execute(notion.comments.list, block_id=obj_id)
+        blocks_col = _collect_all_blocks(obj_id)
+        if blocks_col["successful"]:
+            result["blocks"] = [{"id": b.get("id"), "type": b.get("type"), "has_children": b.get("has_children", False)} for b in blocks_col["data"].get("results", [])]
+        comments_res = safe_execute(lambda **kw: notion.comments.list(**kw), block_id=obj_id)
         if comments_res["successful"]:
             for c in comments_res["data"].get("results", []):
-                result["comments"].append({
-                    "id": c["id"],
-                    "discussion_id": c.get("discussion_id"),
-                    "text": "".join([t["plain_text"] for t in c["rich_text"]])
-                })
-
-    # Step 3: If database → fetch schema + rows (pages inside database)
+                result["comments"].append({"id": c.get("id"), "discussion_id": c.get("discussion_id"), "text": "".join([t.get("plain_text", "") for t in c.get("rich_text", [])])})
     elif obj_type == "database":
-        rows_res = safe_execute(notion.databases.query, obj_id)
+        rows_res = _collect_all_pages_query(obj_id)
         if rows_res["successful"]:
-            for row in rows_res["data"].get("results", []):
-                row_entry = {
-                    "id": row["id"],
-                    "parent": row.get("parent", {}),
-                }
-                result["rows"].append(row_entry)
-
+            result["rows"] = [{"id": r.get("id"), "parent": r.get("parent", {})} for r in rows_res["data"].get("results", [])]
     return {"successful": True, "data": result, "error": ""}
 
-# ==================================================
-# ADVANCED SEARCH TOOLS
-# ==================================================
+
+# ---------------- COMMENT TOOLS ----------------
+@mcp.tool()
+def NOTION_CREATE_COMMENT(comment: Dict[str, Any], discussion_id: Optional[str] = None, parent_page_id: Optional[str] = None):
+    if not discussion_id and not parent_page_id:
+        return {"successful": False, "data": {}, "error": "Either discussion_id or parent_page_id must be provided."}
+    # Build rich_text payload for comment.create
+    payload = {"rich_text": [{"type": "text", "text": {"content": comment.get("content", "")}}]}
+    if discussion_id:
+        payload["discussion_id"] = discussion_id
+    else:
+        # parent page
+        payload["parent"] = {"type": "page_id", "page_id": parent_page_id}
+    return safe_execute(lambda **kw: notion.comments.create(**kw), **payload)
+
 
 @mcp.tool()
-def advanced_search(query: str = None, object_type: str = None, 
-                   created_by: str = None, last_edited_time: dict = None,
-                   page_size: int = 100):
+def NOTION_GET_COMMENT_BY_ID(parent_block_id: str, comment_id: str):
+    if not parent_block_id or not comment_id:
+        return {"successful": False, "data": {}, "error": "parent_block_id and comment_id are required."}
+    # fetch (paginated if needed)
+    kwargs = {"block_id": parent_block_id, "page_size": 100}
+    res = safe_execute(lambda **kw: notion.comments.list(**kw), **kwargs)
+    if not res["successful"]:
+        return res
+    for c in res["data"].get("results", []):
+        if c.get("id") == comment_id:
+            return {"successful": True, "data": c, "error": None}
+    return {"successful": False, "data": {}, "error": f"Comment with ID {comment_id} not found."}
+
+
+@mcp.tool()
+def NOTION_FETCH_COMMENTS(block_id: str, page_size: Optional[int] = 100, start_cursor: Optional[str] = None):
+    if not block_id:
+        return {"successful": False, "data": {}, "error": "block_id is required."}
+    kwargs = {"block_id": block_id, "page_size": page_size}
+    if start_cursor is not None:
+        kwargs["start_cursor"] = start_cursor
+    return safe_execute(lambda **kw: notion.comments.list(**kw), **kwargs)
+#--------------------------------------
+           #SEARCH TOOLS
+#--------------------------------------
+
+@mcp.tool()
+def NOTION_SEARCH_NOTION_PAGE(
+    direction: Optional[str] = None,
+    filter_property: Optional[str] = "object",
+    filter_value: Optional[str] = "page",
+    page_size: int = 2,
+    query: Optional[str] = "",
+    start_cursor: Optional[str] = None,
+    timestamp: Optional[str] = None,
+):
     """
-    Advanced search with multiple filters.
-    - query: Text to search for
-    - object_type: Filter by object type ('page', 'database', 'user')
-    - created_by: Filter by creator user ID
-    - last_edited_time: Filter by last edited time (dict with 'after' or 'before' keys)
-    - page_size: Number of results to return (max 100)
+    Search Notion pages and databases by title.
+    An empty query returns all accessible items.
     """
-    args = {"page_size": page_size}
-    
-    # Add query if provided
+    kwargs = {
+        "page_size": page_size,
+        "filter": {"property": filter_property, "value": filter_value},
+    }
+
     if query:
-        args["query"] = query
-    
-    # Build filter object
-    filter_dict = {}
-    
-    if object_type:
-        filter_dict["property"] = "object"
-        filter_dict["value"] = object_type
-    
-    if created_by:
-        if not filter_dict:
-            filter_dict = {"property": "created_by", "value": created_by}
-        else:
-            # Combine filters with AND logic
-            filter_dict = {
-                "and": [
-                    filter_dict,
-                    {"property": "created_by", "value": created_by}
-                ]
-            }
-    
-    if last_edited_time:
-        if not filter_dict:
-            filter_dict = {"property": "last_edited_time", **last_edited_time}
-        else:
-            filter_dict = {
-                "and": [
-                    filter_dict,
-                    {"property": "last_edited_time", **last_edited_time}
-                ]
-            }
-    
-    if filter_dict:
-        args["filter"] = filter_dict
-    
-    return safe_execute(notion.search, **args)
+        kwargs["query"] = query
+    if timestamp:
+        kwargs["sort"] = {"direction": direction or "ascending", "timestamp": timestamp}
+    if start_cursor:
+        kwargs["start_cursor"] = start_cursor
+
+    return safe_execute(lambda **kw: notion.search(**kw), **kwargs)
 
 @mcp.tool()
-def search_by_property(query: str, property_name: str, property_type: str = "title"):
+def NOTION_FETCH_DATA(
+    get_all: bool = False,
+    get_databases: bool = False,
+    get_pages: bool = False,
+    page_size: int = 100,
+    query: Optional[str] = None,
+):
     """
-    Search for content within specific properties.
-    - query: Text to search for
-    - property_name: Name of the property to search in
-    - property_type: Type of property ('title', 'rich_text', 'select', etc.)
+    Fetch Notion items (pages and/or databases).
+    Minimal metadata only.
     """
-    filter_dict = {
-        "property": property_name,
-        property_type: {"contains": query}
-    }
-    
-    return safe_execute(notion.search, filter=filter_dict)
+    kwargs = {"page_size": page_size}
+    if query:
+        kwargs["query"] = query
 
-@mcp.tool()
-def search_recently_modified(days: int = 7, object_type: str = None):
-    """
-    Search for recently modified content.
-    - days: Number of days to look back (default 7)
-    - object_type: Filter by object type ('page', 'database')
-    """
-    from datetime import datetime, timedelta
-    
-    cutoff_date = datetime.now() - timedelta(days=days)
-    cutoff_iso = cutoff_date.isoformat()
-    
-    filter_dict = {
-        "property": "last_edited_time",
-        "last_edited_time": {"after": cutoff_iso}
-    }
-    
-    if object_type:
-        filter_dict = {
-            "and": [
-                filter_dict,
-                {"property": "object", "value": object_type}
-            ]
-        }
-    
-    return safe_execute(notion.search, filter=filter_dict)
+    if get_all:
+        return safe_execute(lambda **kw: notion.search(**kw), **kwargs)
 
-# ==================================================
-# HEALTH CHECK TOOLS
-# ==================================================
+    if get_databases:
+        kwargs["filter"] = {"property": "object", "value": "database"}
+        return safe_execute(lambda **kw: notion.search(**kw), **kwargs)
 
-@mcp.tool()
-def health_check():
-    """Check server and Notion API health status"""
-    try:
-        # Test Notion API connection
-        user_info = notion.users.me()
-        
-        return {
-            "successful": True,
-            "data": {
-                "status": "healthy",
-                "notion_api": "connected",
-                "user_id": user_info.get("id"),
-                "workspace": user_info.get("bot", {}).get("workspace_name"),
-                "rate_limiter": "active",
-                "error_handling": "enhanced"
-            },
-            "error": ""
-        }
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return {
-            "successful": False,
-            "data": {
-                "status": "unhealthy",
-                "notion_api": "disconnected",
-                "error": str(e)
-            },
-            "error": f"Health check failed: {e}"
-        }
+    if get_pages:
+        kwargs["filter"] = {"property": "object", "value": "page"}
+        return safe_execute(lambda **kw: notion.search(**kw), **kwargs)
 
-@mcp.tool()
-def get_server_info():
-    """Get server configuration and status information"""
-    return {
-        "successful": True,
-        "data": {
-            "server_name": "notion-user-mcp-server",
-            "version": "2.0.0",
-            "features": {
-                "rate_limiting": True,
-                "comments_system": True,
-                "advanced_search": True,
-                "enhanced_error_handling": True,
-                "input_validation": True,
-                "logging": True
-            },
-            "total_tools": 28,
-            "notion_api_version": "2022-06-28",
-            "rate_limit": "3 requests/second"
-        },
-        "error": ""
-    }
+    # Default: pages
+    kwargs["filter"] = {"property": "object", "value": "page"}
+    return safe_execute(lambda **kw: notion.search(**kw), **kwargs)
 
-# ==================================================
-# RUN SERVER
-# ==================================================
+# ---------------- ENTRYPOINT ----------------
 if __name__ == "__main__":
-    logger.info("Starting Notion MCP Server ")
-    logger.info("Features: Rate Limiting, Comments, Advanced Search, Enhanced Error Handling")
-    mcp.run()
+    logger.info("Starting Notion MCP server...")
+    asyncio.run(mcp.run())
