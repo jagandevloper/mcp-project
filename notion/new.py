@@ -14,7 +14,7 @@ logger = logging.getLogger("notion_mcp")
 mcp = FastMCP("notion-mcp")
 
 # Use environment variable in production. If you keep a literal for testing, replace below.
-NOTION_TOKEN = os.getenv("NOTION_TOKEN") or "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"
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 if not NOTION_TOKEN:
     raise RuntimeError("❌ Please set NOTION_TOKEN in environment variables.")
 
@@ -619,3 +619,4 @@ def NOTION_FETCH_DATA(
 if __name__ == "__main__":
     logger.info("Starting Notion MCP server...")
     asyncio.run(mcp.run())
+
