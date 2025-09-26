@@ -4,7 +4,7 @@ from typing import Optional, List, Dict
 from mcp.server.fastmcp import FastMCP
 
 # --- Configuration ---
-TALLY_API_KEY ="tly-vqiu7S7QXS7U2YNddkcQDFkiYb9DBqG2"
+TALLY_API_KEY =""
 TALLY_API_BASE = "https://api.tally.so"
 
 if not TALLY_API_KEY:
@@ -279,3 +279,4 @@ async def TALLY_UPDATE_FORM(
 
 if __name__ == "__main__":
     mcp.run()
+
