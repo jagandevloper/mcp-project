@@ -187,20 +187,12 @@ The server includes comprehensive error handling:
 ### Project Structure
 ```
 tally/
-├── main.py              # Full MCP server entry point
-├── fastmcp_server.py    # Simplified FastMCP server
-├── tools.py             # Tool definitions and schemas
-├── handlers.py          # Tool implementation handlers
-├── pyproject.toml      # Project configuration
-├── config.example      # Configuration template
-└── README.md           # This file
+├── tool_o.py              # Full MCP server entry point
+├── python_version         # python version
+├── pyproject.toml         # Project configuration
+├── uv.lock                # Configuration template
+└── README.md              # readme file
 ```
-
-### Adding New Tools
-
-1. Add tool definition to `tools.py`
-2. Add handler function to `handlers.py`
-3. Add tool routing to `main.py` in the `call_tool` function
 
 ## License
 
@@ -212,4 +204,5 @@ For issues related to:
 - This MCP server: Create an issue in this repository
 - Tally API: Contact Tally support
 - MCP protocol: Refer to MCP documentation
+
 
