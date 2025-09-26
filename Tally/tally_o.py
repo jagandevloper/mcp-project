@@ -191,8 +191,6 @@ async def TALLY_GET_FORM(formId: str):
             return {"status": r.status_code, "response": r.text}
 
 
-from typing import List, Dict, Optional
-import httpx
 
 @mcp.tool()
 async def TALLY_CREATE_FORM(
@@ -279,4 +277,5 @@ async def TALLY_UPDATE_FORM(
 
 if __name__ == "__main__":
     mcp.run()
+
 
