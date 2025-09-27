@@ -268,14 +268,278 @@ async def TALLY_UPDATE_FORM(
         except Exception:
             return {"status": r.status_code, "response": r.text}
 
+
+
+@mcp.tool()
+async def TALLY_LIST_FORM_QUESTIONS(formId: str) -> Dict:
+    """
+    Retrieve all questions for a specific form by its ID.
+    """
+    url = f"{TALLY_API_BASE}/forms/{formId}/questions"
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=headers)
+
+        if r.status_code == 200:
+            return r.json()  # returns "questions" and "hasResponses"
+        if r.status_code == 401:
+            return {"status": 401, "error": "Unauthorized - check API key"}
+        if r.status_code == 403:
+            return {"status": 403, "error": "Forbidden - insufficient permissions"}
+        if r.status_code == 404:
+            return {"status": 404, "error": f"Form '{formId}' not found"}
+
+        # fallback for unexpected responses
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+@mcp.tool()
+async def TALLY_LIST_SUBMISSIONS(
+    formId: str,
+    page: int = 1,
+    filter: Optional[str] = "all",
+    startDate: Optional[str] = None,
+    endDate: Optional[str] = None,
+    afterId: Optional[str] = None
+) -> Dict:
+    """
+    Retrieve a paginated list of submissions for a specific form.
+    Optional filters: all, completed, partial; date range; after a specific submission ID.
+    """
+    url = f"{TALLY_API_BASE}/forms/{formId}/submissions"
+    params = {"page": page}
+    if filter:
+        params["filter"] = filter
+    if startDate:
+        params["startDate"] = startDate
+    if endDate:
+        params["endDate"] = endDate
+    if afterId:
+        params["afterId"] = afterId
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=headers, params=params)
+
+        if r.status_code == 200:
+            return r.json()
+        if r.status_code == 401:
+            return {"status": 401, "error": "Unauthorized - check API key"}
+        if r.status_code == 403:
+            return {"status": 403, "error": "Forbidden - insufficient permissions"}
+        if r.status_code == 404:
+            return {"status": 404, "error": f"Form '{formId}' not found"}
+
+        # fallback for unexpected responses
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+@mcp.tool()
+async def TALLY_GET_SUBMISSION(formId: str, submissionId: str) -> Dict:
+    """
+    Retrieve a specific submission of a form including all responses and form questions.
+    """
+    url = f"{TALLY_API_BASE}/forms/{formId}/submissions/{submissionId}"
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=headers)
+
+        if r.status_code == 200:
+            return r.json()
+        if r.status_code == 401:
+            return {"status": 401, "error": "Unauthorized - check API key"}
+        if r.status_code == 403:
+            return {"status": 403, "error": "Forbidden - insufficient permissions"}
+        if r.status_code == 404:
+            return {"status": 404, "error": f"Form '{formId}' or Submission '{submissionId}' not found"}
+
+        # fallback for unexpected responses
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+@mcp.tool()
+async def TALLY_DELETE_SUBMISSION(formId: str, submissionId: str) -> Dict:
+    """
+    Delete a specific submission from a form.
+    """
+    url = f"{TALLY_API_BASE}/forms/{formId}/submissions/{submissionId}"
+
+    async with httpx.AsyncClient() as client:
+        r = await client.delete(url, headers=headers)
+
+        if r.status_code == 204:
+            return {"status": 204, "message": "Submission deleted successfully"}
+        if r.status_code == 401:
+            return {"status": 401, "error": "Unauthorized - check API key"}
+        if r.status_code == 403:
+            return {"status": 403, "error": "Forbidden - insufficient permissions"}
+        if r.status_code == 404:
+            return {"status": 404, "error": f"Form '{formId}' or Submission '{submissionId}' not found"}
+
+        # fallback for unexpected responses
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
 # ------------------------------------------------
 #            Webhooks
 # ------------------------------------------------
+@mcp.tool()
+async def TALLY_LIST_WEBHOOKS(page: int = 1, limit: int = 25) -> Dict:
+    """
+    List all webhooks across accessible forms and workspaces.
+    Pagination supported via `page` and `limit` parameters.
+    """
+    url = f"{TALLY_API_BASE}/webhooks"
+    params = {"page": page, "limit": min(limit, 100)}
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=headers, params=params)
+
+        if r.status_code == 200:
+            return r.json()
+        if r.status_code == 401:
+            return {"status": 401, "error": "Unauthorized - check API key"}
+        if r.status_code == 403:
+            return {"status": 403, "error": "Forbidden - insufficient permissions"}
+
+        # fallback for unexpected responses
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+
+@mcp.tool()
+async def TALLY_CREATE_WEBHOOK(
+    formId: str,
+    url: str,
+    eventTypes: List[str] = ["FORM_RESPONSE"],
+    signingSecret: Optional[str] = None,
+    httpHeaders: Optional[List[Dict[str, str]]] = None,
+    externalSubscriber: Optional[str] = None
+):
+    """
+    Create a new webhook for a Tally form.
+    """
+    payload = {
+        "formId": formId,
+        "url": url,
+        "eventTypes": eventTypes
+    }
+    if signingSecret:
+        payload["signingSecret"] = signingSecret
+    if httpHeaders:
+        payload["httpHeaders"] = httpHeaders
+    if externalSubscriber:
+        payload["externalSubscriber"] = externalSubscriber
+
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TALLY_API_BASE}/webhooks", headers=headers, json=payload)
+        
+        if r.status_code == 201:
+            return r.json()
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+@mcp.tool()
+async def TALLY_UPDATE_WEBHOOK(
+    webhookId: str,
+    formId: str,
+    url: str,
+    eventTypes: List[str] = ["FORM_RESPONSE"],
+    isEnabled: bool = True,
+    signingSecret: Optional[str] = None,
+    httpHeaders: Optional[List[Dict[str, str]]] = None
+):
+    """
+    Update an existing Tally webhook.
+    """
+    payload = {
+        "formId": formId,
+        "url": url,
+        "eventTypes": eventTypes,
+        "isEnabled": isEnabled
+    }
+    if signingSecret:
+        payload["signingSecret"] = signingSecret
+    if httpHeaders:
+        payload["httpHeaders"] = httpHeaders
+
+    async with httpx.AsyncClient() as client:
+        r = await client.patch(f"{TALLY_API_BASE}/webhooks/{webhookId}", headers=headers, json=payload)
+        
+        if r.status_code == 204:
+            return {"status": "success", "message": "Webhook updated successfully"}
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+@mcp.tool()
+async def TALLY_DELETE_WEBHOOK(webhookId: str):
+    """
+    Delete a Tally webhook by its ID.
+    """
+    async with httpx.AsyncClient() as client:
+        r = await client.delete(f"{TALLY_API_BASE}/webhooks/{webhookId}", headers=headers)
+        
+        if r.status_code == 204:
+            return {"status": "success", "message": "Webhook deleted successfully"}
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+
+@mcp.tool()
+async def TALLY_LIST_WEBHOOK_EVENTS(webhookId: str, page: Optional[int] = 1):
+    """
+    List events for a specific Tally webhook by webhook ID with pagination.
+    """
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{TALLY_API_BASE}/webhooks/{webhookId}/events",
+            headers=headers,
+            params={"page": page}
+        )
+        
+        if r.status_code == 200:
+            return r.json()
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+@mcp.tool()
+async def TALLY_RETRY_WEBHOOK_EVENT(webhookId: str, eventId: str):
+    """
+    Retry a specific Tally webhook event by its ID.
+    """
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{TALLY_API_BASE}/webhooks/{webhookId}/events/{eventId}",
+            headers=headers
+        )
+        
+        if r.status_code == 204:
+            return {"status": "success", "message": "Webhook event retried successfully."}
+        try:
+            return {"status": r.status_code, "response": r.json()}
+        except Exception:
+            return {"status": r.status_code, "response": r.text}
+
+
 
 
 # ------------------- RUN -------------------
 
 if __name__ == "__main__":
     mcp.run()
-
-
