@@ -266,4 +266,5 @@ For issues related to:
 
 ---
 
-**Made with ❤️ for the Tally and MCP communities**
+
+
