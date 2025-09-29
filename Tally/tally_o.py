@@ -190,8 +190,6 @@ async def TALLY_GET_FORM(formId: str):
         except Exception:
             return {"status": r.status_code, "response": r.text}
 
-
-
 @mcp.tool()
 async def TALLY_CREATE_FORM(
     status: str,
@@ -386,6 +384,18 @@ async def TALLY_DELETE_SUBMISSION(formId: str, submissionId: str) -> Dict:
         except Exception:
             return {"status": r.status_code, "response": r.text}
 
+@mcp.tool()
+async def TALLY_GET_FORM_SETTINGS(formId: str):
+    """
+    Retrieve the settings of a specific form.
+    INPUT:
+      formId (string) - Unique identifier of the form.
+    """
+    url = f"{TALLY_API_BASE}/forms/{formId}"
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=headers)
+    return r.json()
+
 # ------------------------------------------------
 #            Webhooks
 # ------------------------------------------------
@@ -513,24 +523,6 @@ async def TALLY_LIST_WEBHOOK_EVENTS(webhookId: str, page: Optional[int] = 1):
         
         if r.status_code == 200:
             return r.json()
-        try:
-            return {"status": r.status_code, "response": r.json()}
-        except Exception:
-            return {"status": r.status_code, "response": r.text}
-
-@mcp.tool()
-async def TALLY_RETRY_WEBHOOK_EVENT(webhookId: str, eventId: str):
-    """
-    Retry a specific Tally webhook event by its ID.
-    """
-    async with httpx.AsyncClient() as client:
-        r = await client.post(
-            f"{TALLY_API_BASE}/webhooks/{webhookId}/events/{eventId}",
-            headers=headers
-        )
-        
-        if r.status_code == 204:
-            return {"status": "success", "message": "Webhook event retried successfully."}
         try:
             return {"status": r.status_code, "response": r.json()}
         except Exception:
