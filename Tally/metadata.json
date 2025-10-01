@@ -1,0 +1,169 @@
+{
+  "tally": {
+    "description": "MCP server providing tools to interact with Tally.so API (users, workspaces, forms, submissions, webhooks).",
+    "tools": [
+      {
+        "name": "TALLY_GET_USER_INFO",
+        "description": "Get info about the authenticated user",
+        "parameters": {}
+      },
+      {
+        "name": "TALLY_GET_WORKSPACE",
+        "description": "Get info about a workspace by ID",
+        "parameters": {
+          "workspaceId": "string - The ID of the workspace to retrieve"
+        }
+      },
+      {
+        "name": "TALLY_LIST_WORKSPACES",
+        "description": "List all available workspaces",
+        "parameters": {
+          "page": "number (optional) - Page number for pagination (default: 1)"
+        }
+      },
+      {
+        "name": "TALLY_UPDATE_WORKSPACE",
+        "description": "Update workspace details such as name",
+        "parameters": {
+          "workspaceId": "string - The ID of the workspace to update",
+          "name": "string - New name for the workspace"
+        }
+      },
+      {
+        "name": "TALLY_LIST_FORMS",
+        "description": "List all forms, optionally filtered by workspace",
+        "parameters": {
+          "page": "number (optional) - Page number for pagination (default: 1)",
+          "limit": "number (optional) - Maximum number of forms per page (default: 50, max: 500)",
+          "workspaceId": "string (optional) - Workspace ID to filter forms"
+        }
+      },
+      {
+        "name": "TALLY_GET_FORM",
+        "description": "Get details of a specific form by ID",
+        "parameters": {
+          "formId": "string - The ID of the form to retrieve"
+        }
+      },
+      {
+        "name": "TALLY_CREATE_FORM",
+        "description": "Create a new form with specified status, blocks, and optional settings",
+        "parameters": {
+          "status": "string - The status of the form (e.g., 'DRAFT', 'PUBLISHED')",
+          "blocks": "array - List of blocks defining the form structure",
+          "workspaceId": "string (optional) - Workspace ID to create the form in",
+          "templateId": "string (optional) - Template ID to base the form on",
+          "settings": "object (optional) - Additional form settings"
+        }
+      },
+      {
+        "name": "TALLY_UPDATE_FORM",
+        "description": "Update an existing form's name, status, blocks, or settings",
+        "parameters": {
+          "formId": "string - The ID of the form to update",
+          "name": "string (optional) - New name for the form",
+          "status": "string (optional) - New status for the form",
+          "blocks": "array (optional) - Updated list of blocks for the form",
+          "settings": "object (optional) - Updated form settings"
+        }
+      },
+      {
+        "name": "TALLY_DELETE_FORM",
+        "description": "Delete a specific form by ID",
+        "parameters": {
+          "formId": "string - The ID of the form to delete"
+        }
+      },
+      {
+        "name": "TALLY_LIST_FORM_QUESTIONS",
+        "description": "List all questions for a specific form",
+        "parameters": {
+          "formId": "string - The ID of the form to retrieve questions from"
+        }
+      },
+      {
+        "name": "TALLY_LIST_SUBMISSIONS",
+        "description": "List all submissions for a form, with optional filters",
+        "parameters": {
+          "formId": "string - The ID of the form",
+          "page": "number (optional) - Page number for pagination (default: 1)",
+          "filter": "string (optional) - Filter type (default: 'all')",
+          "startDate": "string (optional) - Start date filter (YYYY-MM-DD)",
+          "endDate": "string (optional) - End date filter (YYYY-MM-DD)",
+          "afterId": "string (optional) - Retrieve submissions after a specific ID"
+        }
+      },
+      {
+        "name": "TALLY_GET_SUBMISSION",
+        "description": "Get details of a specific submission by ID",
+        "parameters": {
+          "formId": "string - The ID of the form",
+          "submissionId": "string - The ID of the submission"
+        }
+      },
+      {
+        "name": "TALLY_DELETE_SUBMISSION",
+        "description": "Delete a specific submission by ID",
+        "parameters": {
+          "formId": "string - The ID of the form",
+          "submissionId": "string - The ID of the submission"
+        }
+      },
+      {
+        "name": "TALLY_GET_FORM_SETTINGS",
+        "description": "Get the settings of a specific form",
+        "parameters": {
+          "formId": "string - The ID of the form"
+        }
+      },
+      {
+        "name": "TALLY_LIST_WEBHOOKS",
+        "description": "List all webhooks, with optional pagination",
+        "parameters": {
+          "page": "number (optional) - Page number for pagination (default: 1)",
+          "limit": "number (optional) - Number of webhooks per page (default: 25, max: 100)"
+        }
+      },
+      {
+        "name": "TALLY_CREATE_WEBHOOK",
+        "description": "Create a webhook for a form with specified URL and events",
+        "parameters": {
+          "formId": "string - The ID of the form",
+          "url": "string - The webhook URL",
+          "eventTypes": "array (optional) - List of event types (default: ['FORM_RESPONSE'])",
+          "signingSecret": "string (optional) - Secret for signing webhook payloads",
+          "httpHeaders": "array (optional) - List of headers to include",
+          "externalSubscriber": "string (optional) - External subscriber ID"
+        }
+      },
+      {
+        "name": "TALLY_UPDATE_WEBHOOK",
+        "description": "Update an existing webhook",
+        "parameters": {
+          "webhookId": "string - The ID of the webhook",
+          "formId": "string - The ID of the form",
+          "url": "string - The webhook URL",
+          "eventTypes": "array (optional) - List of event types (default: ['FORM_RESPONSE'])",
+          "isEnabled": "boolean (optional) - Enable or disable webhook (default: True)",
+          "signingSecret": "string (optional) - Secret for signing payloads",
+          "httpHeaders": "array (optional) - List of headers to include"
+        }
+      },
+      {
+        "name": "TALLY_DELETE_WEBHOOK",
+        "description": "Delete a specific webhook by ID",
+        "parameters": {
+          "webhookId": "string - The ID of the webhook"
+        }
+      },
+      {
+        "name": "TALLY_LIST_WEBHOOK_EVENTS",
+        "description": "List all events for a specific webhook",
+        "parameters": {
+          "webhookId": "string - The ID of the webhook",
+          "page": "number (optional) - Page number for pagination (default: 1)"
+        }
+      }
+    ]
+  }
+}
