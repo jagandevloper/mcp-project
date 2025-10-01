@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "tally-mcp": {
+      "command": "bash",
+      "args": ["-c", "cd /app/LocalMCPs/tally-mcp && uv run server.py"],
+      "type": "stdio",
+      "env": {
+        "TALLY_API_KEY": {
+          "source": "project",
+          "collection_method": "none",
+          "env_var": "TALLY_API_KEY"
+        }
+      }
+    }
+  }
+}
