@@ -72,13 +72,6 @@ export TALLY_API_KEY="your_tally_api_key_here"
 python tally_o.py
 ```
 
-#### Flask Webhook Server (server.py)
-```bash
-python server.py
-```
-
-The Flask server provides a webhook endpoint for receiving Tally form submissions and storing them in MySQL.
-
 ### Tool Usage Examples
 
 #### Creating a Form
@@ -265,6 +258,7 @@ For issues related to:
 
 
 ---
+
 
 
 
