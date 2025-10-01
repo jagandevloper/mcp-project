@@ -21,7 +21,7 @@ This MCP server provides **19 tools** covering all aspects of Tally management:
 - **TALLY_GET_FORM**: Retrieve comprehensive form metadata with all blocks
 - **TALLY_LIST_FORMS**: List all accessible forms with pagination and filtering
 - **TALLY_LIST_FORM_QUESTIONS**: Get all questions for a specific form
-- **TALLY_GET_FORM_SETTINGS**:Retrieve the settings of a specific form
+- **TALLY_GET_FORM_SETTINGS**: Get form settings and configuration
 
 ### 📊 Submission Management
 - **TALLY_LIST_SUBMISSIONS**: List form submissions with pagination and filtering
@@ -34,7 +34,6 @@ This MCP server provides **19 tools** covering all aspects of Tally management:
 - **TALLY_DELETE_WEBHOOK**: Remove webhooks
 - **TALLY_LIST_WEBHOOKS**: List all configured webhooks
 - **TALLY_LIST_WEBHOOK_EVENTS**: Inspect webhook delivery history
-
 
 ## 📦 Installation
 
@@ -56,7 +55,7 @@ uv sync
 
 3. **Set up your Tally API key:**
 ```bash
-# Option 1: Environment variable
+# Option 1: Environment variable (Recommended)
 export TALLY_API_KEY="your_tally_api_key_here"
 
 # Option 2: Direct in code (for development only)
@@ -70,6 +69,52 @@ export TALLY_API_KEY="your_tally_api_key_here"
 #### Main MCP Server (tally_o.py)
 ```bash
 python tally_o.py
+```
+
+The server will start and be ready to accept MCP client connections.
+
+### MCP Client Configuration
+
+#### For Claude Desktop
+
+Add this configuration to your Claude Desktop config file:
+
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Linux**: `~/.config/claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "tally-mcp": {
+      "command": "python",
+      "args": ["tally_o.py"],
+      "cwd": "/path/to/your/tally/directory",
+      "env": {
+        "TALLY_API_KEY": "your_tally_api_key_here"
+      }
+    }
+  }
+}
+```
+
+#### For Other MCP Clients
+
+```json
+{
+  "servers": {
+    "tally": {
+      "command": "python",
+      "args": ["tally_o.py"],
+      "cwd": "/path/to/your/tally/directory",
+      "env": {
+        "TALLY_API_KEY": "your_tally_api_key_here",
+        "TALLY_API_BASE_URL": "https://api.tally.so",
+        "TALLY_TIMEOUT": "30.0"
+      }
+    }
+  }
+}
 ```
 
 ### Tool Usage Examples
@@ -155,51 +200,42 @@ submission = await TALLY_GET_SUBMISSION(
 )
 ```
 
+## ⚙️ Configuration
 
+### Environment Variables
 
-
+- `TALLY_API_KEY`: Your Tally API key (required)
+- `TALLY_API_BASE_URL`: API base URL (default: https://api.tally.so)
+- `TALLY_TIMEOUT`: Request timeout in seconds (default: 30.0)
+- `TALLY_LOG_LEVEL`: Logging level (default: INFO)
 
 ### API Configuration
 
 The server connects to the Tally API at `https://api.tally.so` and uses Bearer token authentication.
 
-## 📋 Tool Parameters Reference
+## 📋 Complete Tools Reference
 
-### Required Parameters
-Tools marked with `[REQUIRED]` will fail if these parameters are not provided:
-
-- **TALLY_CREATE_FORM**: `status`, `blocks`
-- **TALLY_CREATE_WEBHOOK**: `formId`, `url`
-- **TALLY_DELETE_FORM**: `formId`
-- **TALLY_DELETE_SUBMISSION**: `formId`, `submissionId`
-- **TALLY_DELETE_WEBHOOK**: `webhookId`
-- **TALLY_GET_FORM**: `formId`
-- **TALLY_GET_SUBMISSION**: `formId`, `submissionId`
-- **TALLY_GET_WORKSPACE**: `workspaceId`
-- **TALLY_LIST_FORM_QUESTIONS**: `formId`
-- **TALLY_LIST_SUBMISSIONS**: `formId`
-- **TALLY_LIST_WEBHOOK_EVENTS**: `webhookId`
-- **TALLY_UPDATE_FORM**: `formId`
-- **TALLY_UPDATE_WORKSPACE**: `workspaceId`, `name`
-- **TALLY_UPDATE_WEBHOOK**: `webhookId`, `formId`, `url`
-
-### Optional Parameters
-All other parameters are optional and can be omitted if not needed.
-
-## 🗃️ Database Setup (for Flask server)
-
-If using the Flask webhook server, set up MySQL:
-
-```sql
-CREATE DATABASE mcp_tally;
-USE mcp_tally;
-
-CREATE TABLE submissions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    data TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+| Tool Name | Category | Description | Required Parameters | Optional Parameters |
+|-----------|----------|-------------|-------------------|-------------------|
+| **TALLY_GET_USER_INFO** | User | Get authenticated user information | None | None |
+| **TALLY_GET_WORKSPACE** | Workspace | Get workspace details | `workspaceId: str` | None |
+| **TALLY_LIST_WORKSPACES** | Workspace | List all workspaces | None | `page: int = 1` |
+| **TALLY_UPDATE_WORKSPACE** | Workspace | Update workspace name | `workspaceId: str`, `name: str` | None |
+| **TALLY_CREATE_FORM** | Form | Create a new form | `status: str`, `blocks: List[Dict]` | `workspaceId: str`, `templateId: str`, `settings: Dict` |
+| **TALLY_UPDATE_FORM** | Form | Update existing form | `formId: str` | `name: str`, `status: str`, `blocks: List[Dict]`, `settings: Dict` |
+| **TALLY_DELETE_FORM** | Form | Delete a form | `formId: str` | None |
+| **TALLY_GET_FORM** | Form | Get form details | `formId: str` | None |
+| **TALLY_LIST_FORMS** | Form | List all forms | None | `page: int = 1`, `limit: int = 50`, `workspaceId: str` |
+| **TALLY_LIST_FORM_QUESTIONS** | Form | Get form questions | `formId: str` | None |
+| **TALLY_GET_FORM_SETTINGS** | Form | Get form settings | `formId: str` | None |
+| **TALLY_LIST_SUBMISSIONS** | Submission | List form submissions | `formId: str` | `page: int = 1`, `filter: str = "all"`, `startDate: str`, `endDate: str`, `afterId: str` |
+| **TALLY_GET_SUBMISSION** | Submission | Get specific submission | `formId: str`, `submissionId: str` | None |
+| **TALLY_DELETE_SUBMISSION** | Submission | Delete a submission | `formId: str`, `submissionId: str` | None |
+| **TALLY_CREATE_WEBHOOK** | Webhook | Create webhook | `formId: str`, `url: str` | `eventTypes: List[str] = ["FORM_RESPONSE"]`, `signingSecret: str`, `httpHeaders: List[Dict]`, `externalSubscriber: str` |
+| **TALLY_UPDATE_WEBHOOK** | Webhook | Update webhook | `webhookId: str`, `formId: str`, `url: str` | `eventTypes: List[str] = ["FORM_RESPONSE"]`, `isEnabled: bool = True`, `signingSecret: str`, `httpHeaders: List[Dict]` |
+| **TALLY_DELETE_WEBHOOK** | Webhook | Delete webhook | `webhookId: str` | None |
+| **TALLY_LIST_WEBHOOKS** | Webhook | List all webhooks | None | `page: int = 1`, `limit: int = 25` |
+| **TALLY_LIST_WEBHOOK_EVENTS** | Webhook | List webhook events | `webhookId: str` | `page: int = 1` |
 
 ## 🔧 Error Handling
 
@@ -233,7 +269,7 @@ The project uses the following key dependencies:
 - `mcp[cli]>=1.0.0`: Model Context Protocol framework
 - `httpx>=0.25.0`: Async HTTP client
 - `fastmcp>=0.1.0`: FastMCP server implementation
-
+- `fastapi>=0.117.1`: Web framework for additional endpoints
 
 ### Adding New Tools
 
@@ -246,19 +282,12 @@ The project uses the following key dependencies:
 
 Test individual tools using the MCP client or by running the server and making direct API calls.
 
+## 🔒 Security Notes
 
-
-## 📞 Support
-
-For issues related to:
-- **This MCP server**: Create an issue in this repository
-- **Tally API**: Contact [Tally support](https://tally.so/help)
-- **MCP protocol**: Refer to [MCP documentation](https://modelcontextprotocol.io/)
-
-
-
----
-
+- **API Key**: Never commit your Tally API key to version control
+- **Webhook Security**: Use signing secrets for webhook verification
+- **Environment**: Use environment variables for sensitive configuration
+- **Network**: Use HTTPS for all API communications
 
 
 
