@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "notion": {
+      "command": "python",
+      "args": ["path/to/production.py"],
+      "env": {
+        "NOTION_TOKEN": "your_token_here"
+      }
+    }
+  }
+}
