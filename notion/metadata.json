@@ -1,0 +1,543 @@
+{
+    "project_info": {
+    "name": "Notion MCP Server",
+    "version": "1.0.0",
+    "description": "A FastMCP server providing a comprehensive set of tools for interacting with the Notion API to manage pages, databases, blocks, and users.",
+    "author": "Your Name/Username",
+    "last_updated": "2025-10-03"
+    },
+    "actions": [
+    {
+        "name": "NOTION_GET_ABOUT_ME",
+        "category": "User Management",
+        "description": "Retrieves detailed information about the currently authenticated user (bot).",
+        "parameters": []
+    },
+    {
+        "name": "NOTION_LIST_USERS",
+        "category": "User Management",
+        "description": "Lists all users in the workspace, including bots and guests.",
+        "parameters": [
+        {
+            "name": "page_size",
+            "type": "integer",
+            "description": "The number of users to return per request.",
+            "required": false
+        },
+        {
+            "name": "start_cursor",
+            "type": "string",
+            "description": "The cursor for fetching the next page of results.",
+            "required": false
+        }
+        ]
+    },
+    {
+        "name": "NOTION_GET_ABOUT_USER",
+        "category": "User Management",
+        "description": "Retrieves detailed information for a specific user by their ID.",
+        "parameters": [
+        {
+            "name": "user_id",
+            "type": "string",
+            "description": "The ID of the user to retrieve.",
+            "required": true
+        }
+        ]
+    },
+    {
+        "name": "NOTION_CREATE_NOTION_PAGE",
+        "category": "Page Operations",
+        "description": "Creates a new page, either as a sub-page of another page or as an entry in a database.",
+        "parameters": [
+        {
+            "name": "parent_id",
+            "type": "string",
+            "description": "The ID of the parent page or database.",
+            "required": true
+        },
+        {
+            "name": "title",
+            "type": "string",
+            "description": "The title of the new page.",
+            "required": true
+        },
+        {
+            "name": "cover",
+            "type": "string",
+            "description": "A URL for an external cover image.",
+            "required": false
+        },
+        {
+            "name": "icon",
+            "type": "string",
+            "description": "An emoji to use as the page icon.",
+            "required": false
+        }
+        ]
+    },
+    {
+        "name": "NOTION_DUPLICATE_PAGE",
+        "category": "Page Operations",
+        "description": "Duplicates an existing page, including all its content blocks, to a new location.",
+        "parameters": [
+        {
+            "name": "page_id",
+            "type": "string",
+            "description": "The ID of the page to duplicate.",
+            "required": true
+        },
+        {
+            "name": "parent_id",
+            "type": "string",
+            "description": "The ID of the new parent for the duplicated page.",
+            "required": true
+        },
+        {
+            "name": "title",
+            "type": "string",
+            "description": "A new title for the duplicate page.",
+            "required": false
+        }
+        ]
+    },
+    {
+        "name": "NOTION_UPDATE_PAGE",
+        "category": "Page Operations",
+        "description": "Updates a page's metadata (title, icon, cover) and properties. Can also archive the page.",
+        "parameters": [
+        {
+            "name": "page_id",
+            "type": "string",
+            "description": "The ID of the page to update.",
+            "required": true
+        },
+        {
+            "name": "title",
+            "type": "string",
+            "description": "The new title for the page.",
+            "required": false
+        },
+        {
+            "name": "archived",
+            "type": "boolean",
+            "description": "Set to true to archive the page or false to restore it.",
+            "required": false
+        },
+        {
+            "name": "properties",
+            "type": "object",
+            "description": "A dictionary of page properties to update.",
+            "required": false
+        }
+        ]
+    },
+    {
+        "name": "NOTION_GET_PAGE_PROPERTY_ACTION",
+        "category": "Page Operations",
+        "description": "Retrieves the value of a single property from a page.",
+        "parameters": [
+        {
+            "name": "page_id",
+            "type": "string",
+            "description": "The ID of the page (database row).",
+            "required": true
+        },
+        {
+            "name": "property_id",
+            "type": "string",
+            "description": "The ID of the property to retrieve.",
+            "required": true
+        }
+        ]
+    },
+    {
+        "name": "NOTION_ARCHIVE_NOTION_PAGE",
+        "category": "Page Operations",
+        "description": "Moves a page to the trash (archives it) or restores it.",
+        "parameters": [
+        {
+            "name": "page_id",
+            "type": "string",
+            "description": "The ID of the page to archive or restore.",
+            "required": true
+        },
+        {
+            "name": "archive",
+            "type": "boolean",
+            "description": "Set to true to archive, false to restore. Defaults to true.",
+            "required": false
+        }
+        ]
+    },
+    {
+        "name": "list_pages",
+        "category": "Page Operations",
+        "description": "Searches for and lists all accessible pages, optionally filtered by a keyword.",
+        "parameters": [
+        {
+            "name": "keyword",
+            "type": "string",
+            "description": "A keyword to filter pages by title.",
+            "required": false
+        }
+        ]
+    },
+    {
+        "name": "NOTION_CREATE_DATABASE",
+        "category": "Database Management",
+        "description": "Creates a new database as a sub-page within a parent page.",
+        "parameters": [
+        {
+            "name": "parent_id",
+            "type": "string",
+            "description": "The ID of the parent page.",
+            "required": true
+        },
+        {
+            "name": "title",
+            "type": "string",
+            "description": "The title for the new database.",
+            "required": true
+        },
+        {
+            "name": "properties",
+            "type": "object",
+            "description": "A dictionary defining the database schema (columns).",
+            "required": true
+        }
+        ]
+    },
+    {
+        "name": "NOTION_INSERT_ROW_DATABASE",
+        "category": "Database Management",
+        "description": "Inserts a new row (which is a page) into a database.",
+        "parameters": [
+        {
+          "name": "database_id",
+          "type": "string",
+          "description": "The ID of the target database.",
+          "required": true
+        },
+        {
+          "name": "properties",
+          "type": "object",
+          "description": "A dictionary of property values for the new row.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_QUERY_DATABASE",
+      "category": "Database Management",
+      "description": "Queries a database with optional filters and sorting to retrieve a list of pages (rows).",
+      "parameters": [
+        {
+          "name": "database_id",
+          "type": "string",
+          "description": "The ID of the database to query.",
+          "required": true
+        },
+        {
+          "name": "filter",
+          "type": "object",
+          "description": "A Notion API filter object to apply to the query.",
+          "required": false
+        },
+        {
+          "name": "sorts",
+          "type": "array",
+          "description": "A list of sort objects to order the results.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "NOTION_FETCH_DATABASE",
+      "category": "Database Management",
+      "description": "Retrieves the full metadata of a database, including its title and schema.",
+      "parameters": [
+        {
+          "name": "database_id",
+          "type": "string",
+          "description": "The ID of the database to fetch.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_FETCH_ROW",
+      "category": "Database Management",
+      "description": "Retrieves all properties of a single page (row) from a database.",
+      "parameters": [
+        {
+          "name": "page_id",
+          "type": "string",
+          "description": "The ID of the page (row) to retrieve.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_UPDATE_ROW_DATABASE",
+      "category": "Database Management",
+      "description": "Updates the properties of an existing row within a database.",
+      "parameters": [
+        {
+          "name": "page_id",
+          "type": "string",
+          "description": "The ID of the page (row) to update.",
+          "required": true
+        },
+        {
+          "name": "properties",
+          "type": "object",
+          "description": "A dictionary of property values to update.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "NOTION_UPDATE_SCHEMA_DATABASE",
+      "category": "Database Management",
+      "description": "Updates the schema (columns/properties) or title of an existing database.",
+      "parameters": [
+        {
+          "name": "database_id",
+          "type": "string",
+          "description": "The ID of the database to update.",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "description": "A new title for the database.",
+          "required": false
+        },
+        {
+          "name": "properties",
+          "type": "object",
+          "description": "A new properties object to redefine the schema.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "NOTION_ADD_MULTIPLE_PAGE_CONTENT",
+      "category": "Block Operations",
+      "description": "Appends a list of content blocks to a page or another block.",
+      "parameters": [
+        {
+          "name": "parent_block_id",
+          "type": "string",
+          "description": "The ID of the page or block to add content to.",
+          "required": true
+        },
+        {
+          "name": "content_blocks",
+          "type": "array",
+          "description": "A list of valid Notion block objects.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_ADD_PAGE_CONTENT",
+      "category": "Block Operations",
+      "description": "Appends a single content block to a page or parent block.",
+      "parameters": [
+        {
+          "name": "parent_block_id",
+          "type": "string",
+          "description": "The ID of the page or block to add content to.",
+          "required": true
+        },
+        {
+          "name": "content_block",
+          "type": "object",
+          "description": "A valid Notion block object.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_APPEND_BLOCK_CHILDREN",
+      "category": "Block Operations",
+      "description": "Appends a list of child blocks to a parent block.",
+      "parameters": [
+        {
+          "name": "block_id",
+          "type": "string",
+          "description": "The ID of the parent block.",
+          "required": true
+        },
+        {
+          "name": "children",
+          "type": "array",
+          "description": "A list of valid Notion block objects.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_UPDATE_BLOCK",
+      "category": "Block Operations",
+      "description": "Updates the content of an existing block, such as changing paragraph text.",
+      "parameters": [
+        {
+          "name": "block_id",
+          "type": "string",
+          "description": "The ID of the block to update.",
+          "required": true
+        },
+        {
+          "name": "content",
+          "type": "object",
+          "description": "The new content object for the block, matching the block's type.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_DELETE_BLOCK",
+      "category": "Block Operations",
+      "description": "Deletes a block by archiving it (moving it to the trash).",
+      "parameters": [
+        {
+          "name": "block_id",
+          "type": "string",
+          "description": "The ID of the block to delete.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_FETCH_BLOCK_CONTENTS",
+      "category": "Block Operations",
+      "description": "Lists all the child blocks contained within a parent block or page.",
+      "parameters": [
+        {
+          "name": "block_id",
+          "type": "string",
+          "description": "The ID of the parent block or page.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_FETCH_BLOCK_METADATA",
+      "category": "Block Operations",
+      "description": "Retrieves all metadata for a single block, such as its type and parent.",
+      "parameters": [
+        {
+          "name": "block_id",
+          "type": "string",
+          "description": "The ID of the block to retrieve.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_CREATE_COMMENT",
+      "category": "Comments System",
+      "description": "Adds a new comment to a page, block, or existing discussion thread.",
+      "parameters": [
+        {
+          "name": "parent_id",
+          "type": "string",
+          "description": "The ID of the page or block to comment on.",
+          "required": true
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "description": "The plain text content of the comment.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_GET_COMMENT_BY_ID",
+      "category": "Comments System",
+      "description": "Fetches a specific comment by its ID from a page or block.",
+      "parameters": [
+        {
+          "name": "parent_block_id",
+          "type": "string",
+          "description": "The ID of the page or block where the comment exists.",
+          "required": true
+        },
+        {
+          "name": "comment_id",
+          "type": "string",
+          "description": "The ID of the comment to retrieve.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_FETCH_COMMENTS",
+      "category": "Comments System",
+      "description": "Lists all comments on a specific page or block.",
+      "parameters": [
+        {
+          "name": "block_id",
+          "type": "string",
+          "description": "The ID of the page or block.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NOTION_SEARCH_NOTION_PAGE",
+      "category": "Search & Discovery",
+      "description": "Performs a global search across pages and databases in the workspace.",
+      "parameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "description": "The search term. An empty query returns all accessible items.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "NOTION_FETCH_DATA",
+      "category": "Search & Discovery",
+      "description": "A flexible tool to fetch pages, databases, or both, with an optional search query.",
+      "parameters": [
+        {
+          "name": "get_databases",
+          "type": "boolean",
+          "description": "Set to true to fetch only databases.",
+          "required": false
+        },
+        {
+          "name": "get_pages",
+          "type": "boolean",
+          "description": "Set to true to fetch only pages.",
+          "required": false
+        },
+        {
+          "name": "query",
+          "type": "string",
+          "description": "A keyword to filter the results.",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "mcp_notion_get_all_ids_from_name",
+      "category": "Search & Discovery",
+      "description": "Finds an object by name and recursively fetches all related child IDs (blocks, rows, etc.).",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "description": "The exact name of the page or database to search for.",
+          "required": true
+        }
+      ]
+    }
+  ]
+}
