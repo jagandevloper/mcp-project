@@ -1,0 +1,11 @@
+[project]
+name = "discord-mcp-server"
+version = "2.0.0"
+description = "Comprehensive Discord Bot MCP Server with 64+ tools - Complete API integration based on Composio toolkit"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.25.0",
+    "fastmcp>=2.12.4",
+    "mcp[cli]>=1.16.0",
+]
