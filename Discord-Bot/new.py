@@ -52,7 +52,7 @@ config.DISCORD_API_BASE = os.getenv("DISCORD_API_BASE", config.DISCORD_API_BASE)
 config.REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", config.REQUEST_TIMEOUT))
 
 # Bot token validation
-DISCORD_BOT_TOKEN = "MTQyNTEzMTI2MjkxNzQ4MDU5Nw.GZy3qk.iyJC4kdkA2ywNARsB8SY8sIB2IPFZ6Q2a6U0WI"
+DISCORD_BOT_TOKEN = "MTQyNTEzMTI2MjkxNzQ4MDU5Nw.GM1GK2.uLTvX6MPEjtPoJoqNm3nGRTy7pHIhAxFjgEk4A"
 if not DISCORD_BOT_TOKEN:
     raise RuntimeError("DISCORD_BOT_TOKEN environment variable must be set. Include leading 'Bot ' if required.")
 
@@ -580,7 +580,7 @@ async def DISCORDBOT_UPDATE_APPLICATION_COMMAND(application_id: str, command_id:
     return await discord_request("PATCH", f"/applications/{application_id}/commands/{command_id}", json=payload)
 
 @mcp.tool()
-async def DISCORDBOT_LIST_APPLICATION_COMMANDS(application_id: str, with_localizations: Optional[bool] = None) -> Any:
+async def DISCORDBOT_LIST_APPLICATION_COMMANDS(application_id: str, with_localizations: bool = False) -> Any:
     """Fetch all global commands for an application.
     
     This tool retrieves a list of all global slash commands registered for your Discord application.
@@ -996,7 +996,7 @@ async def DISCORDBOT_LIST_GUILD_APPLICATION_COMMANDS(application_id: str, guild_
     application_id = _validate_snowflake(application_id, "Application ID")
     guild_id = _validate_guild_id(guild_id)
     params = _filter_none({
-        "with_localizations": with_localizations if with_localizations else None
+        "with_localizations": with_localizations
     })
     return await discord_request("GET", f"/applications/{application_id}/guilds/{guild_id}/commands", params=params)
 
@@ -1490,7 +1490,7 @@ async def DISCORDBOT_CREATE_GUILD_CHANNEL(guild_id: str, name: str, type: int = 
                                           available_tags: str = "",
                                           default_reaction_emoji: str = "",
                                           default_thread_rate_limit_per_user: int = 0,
-                                          default_sort_order: int = 0, reason: str = "") -> Any:
+                                          default_sort_order: int = 0) -> Any:
     """Create a new channel in a Discord server.
     
     This tool creates a new channel in a Discord server with customizable settings.
@@ -1587,8 +1587,6 @@ async def DISCORDBOT_CREATE_GUILD_CHANNEL(guild_id: str, name: str, type: int = 
         "default_sort_order": default_sort_order if default_sort_order > 0 else None
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("POST", f"/guilds/{guild_id}/channels", json=payload, headers=headers)
 
 @mcp.tool()
@@ -1602,7 +1600,7 @@ async def DISCORDBOT_UPDATE_CHANNEL(channel_id: str, name: str = "", type: int =
                                     flags: int = 0, available_tags: str = "",
                                     default_reaction_emoji: str = "",
                                     default_thread_rate_limit_per_user: int = 0,
-                                    default_sort_order: int = 0, reason: str = "") -> Any:
+                                    default_sort_order: int = 0) -> Any:
     """Update a channel's settings and properties.
     
     This tool allows you to modify various aspects of an existing Discord channel including
@@ -1697,8 +1695,6 @@ async def DISCORDBOT_UPDATE_CHANNEL(channel_id: str, name: str = "", type: int =
         "default_sort_order": default_sort_order if default_sort_order > 0 else None
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PATCH", f"/channels/{channel_id}", json=payload, headers=headers)
 
 @mcp.tool()
@@ -1812,7 +1808,7 @@ async def DISCORDBOT_LIST_GUILD_CHANNELS(guild_id: str) -> Any:
 async def DISCORDBOT_CREATE_CHANNEL_INVITE(channel_id: str, max_age: int = 0, max_uses: int = 0,
                                            temporary: bool = False, unique: bool = False,
                                            target_type: int = 0, target_user_id: str = "",
-                                           target_application_id: str = "", reason: str = "") -> Any:
+                                           target_application_id: str = "") -> Any:
     """
     Creates a new invite link for a Discord channel.
 
@@ -1845,8 +1841,6 @@ async def DISCORDBOT_CREATE_CHANNEL_INVITE(channel_id: str, max_age: int = 0, ma
     payload["temporary"] = temporary
     payload["unique"] = unique
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("POST", f"/channels/{channel_id}/invites", json=payload, headers=headers)
 
 @mcp.tool()
@@ -1868,7 +1862,7 @@ async def DISCORDBOT_LIST_CHANNEL_INVITES(channel_id: str) -> Any:
 @mcp.tool()
 async def DISCORDBOT_SET_CHANNEL_PERMISSION_OVERWRITE(channel_id: str, overwrite_id: str, allow: str = "",
                                                      deny: str = "", type: int = 0,
-                                                     reason: str = "") -> Any:
+                                                     ) -> Any:
     """Edit the channel permission overwrites for a user or role in a channel.
     
     Parameters:
@@ -1907,8 +1901,6 @@ async def DISCORDBOT_SET_CHANNEL_PERMISSION_OVERWRITE(channel_id: str, overwrite
         "type": type if type > 0 else None
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PUT", f"/channels/{channel_id}/permissions/{overwrite_id}", json=payload, headers=headers)
 
 @mcp.tool()
@@ -1972,7 +1964,7 @@ async def DISCORDBOT_TRIGGER_TYPING_INDICATOR(channel_id: str) -> Any:
 @mcp.tool()
 async def DISCORDBOT_CREATE_THREAD(channel_id: str, name: str, type: int = 11,
                                    auto_archive_duration: int = 0, invitable: bool = True,
-                                   rate_limit_per_user: int = 0, reason: str = "") -> Any:
+                                   rate_limit_per_user: int = 0) -> Any:
     """Creates a new thread from an existing message.
     
     Parameters:
@@ -1996,14 +1988,12 @@ async def DISCORDBOT_CREATE_THREAD(channel_id: str, name: str, type: int = 11,
         "rate_limit_per_user": rate_limit_per_user if rate_limit_per_user > 0 else None
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("POST", f"/channels/{channel_id}/threads", json=payload, headers=headers)
 
 @mcp.tool()
 async def DISCORDBOT_CREATE_THREAD_FROM_MESSAGE(channel_id: str, message_id: str, name: str,
                                                 auto_archive_duration: int = 0,
-                                                rate_limit_per_user: int = 0, reason: str = "") -> Any:
+                                                rate_limit_per_user: int = 0) -> Any:
     """Creates a new thread from an existing message.
     
     Parameters:
@@ -2022,8 +2012,6 @@ async def DISCORDBOT_CREATE_THREAD_FROM_MESSAGE(channel_id: str, message_id: str
         "rate_limit_per_user": rate_limit_per_user if rate_limit_per_user > 0 else None
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("POST", f"/channels/{channel_id}/messages/{message_id}/threads", json=payload, headers=headers)
 
 @mcp.tool()
@@ -2194,7 +2182,7 @@ async def DISCORDBOT_UPDATE_STAGE_INSTANCE(channel_id: str, topic: str = "",
     return await discord_request("PATCH", f"/stage-instances/{channel_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_STAGE_INSTANCE(channel_id: str, reason: str = "") -> Any:
+async def DISCORDBOT_DELETE_STAGE_INSTANCE(channel_id: str) -> Any:
     """Delete the stage instance.
     
     Parameters:
@@ -2203,8 +2191,6 @@ async def DISCORDBOT_DELETE_STAGE_INSTANCE(channel_id: str, reason: str = "") ->
     """
     channel_id = _validate_channel_id(channel_id)
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/stage-instances/{channel_id}", headers=headers)
 
 @mcp.tool()
@@ -2242,7 +2228,7 @@ async def DISCORDBOT_UPDATE_SELF_VOICE_STATE(guild_id: str, channel_id: str = ""
 
 @mcp.tool()
 async def DISCORDBOT_UPDATE_VOICE_STATE(guild_id: str, user_id: str, channel_id: str = "",
-                                         suppress: bool = False, request_to_speak_timestamp: str = "", reason: str = "") -> Any:
+                                         suppress: bool = False, request_to_speak_timestamp: str = "") -> Any:
     """Updates another user's voice state.
     
     Parameters:
@@ -2261,8 +2247,6 @@ async def DISCORDBOT_UPDATE_VOICE_STATE(guild_id: str, user_id: str, channel_id:
         "request_to_speak_timestamp": request_to_speak_timestamp if request_to_speak_timestamp else None
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     
     try:
         return await discord_request("PATCH", f"/guilds/{guild_id}/voice-states/{user_id}", json=payload, headers=headers)
@@ -2974,7 +2958,7 @@ async def DISCORDBOT_CROSSPOST_MESSAGE(channel_id: str, message_id: str) -> Any:
 async def DISCORDBOT_CREATE_AUTO_MODERATION_RULE(guild_id: str, name: str, event_type: int, trigger_type: int,
                                                  trigger_metadata: str = "", actions: str = "",
                                                  enabled: bool = True, exempt_roles: str = "",
-                                                 exempt_channels: str = "", reason: str = "") -> Any:
+                                                 exempt_channels: str = "") -> Any:
     """Create a new auto moderation rule for a Discord guild.
     
     Parameters:
@@ -3030,8 +3014,6 @@ async def DISCORDBOT_CREATE_AUTO_MODERATION_RULE(guild_id: str, name: str, event
     })
     
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("POST", f"/guilds/{guild_id}/auto-moderation/rules", json=payload, headers=headers)
 
 @mcp.tool()
@@ -3052,7 +3034,7 @@ async def DISCORDBOT_UPDATE_AUTO_MODERATION_RULE(guild_id: str, rule_id: str, na
                                                  event_type: int = 0, trigger_metadata: str = "",
                                                  actions: str = "", enabled: bool = True,
                                                  exempt_roles: str = "", exempt_channels: str = "",
-                                                 reason: str = "") -> Any:
+                                                 ) -> Any:
     """Modify an existing auto moderation rule.
     
     Parameters:
@@ -3090,8 +3072,6 @@ async def DISCORDBOT_UPDATE_AUTO_MODERATION_RULE(guild_id: str, rule_id: str, na
         "exempt_channels": parse_json_param(exempt_channels, "exempt_channels")
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PATCH", f"/guilds/{guild_id}/auto-moderation/rules/{rule_id}", json=payload, headers=headers)
 
 @mcp.tool()
@@ -3104,7 +3084,7 @@ async def DISCORDBOT_DELETE_AUTO_MODERATION_RULE(guild_id: str, rule_id: str) ->
 
 @mcp.tool()
 async def DISCORDBOT_BULK_BAN_USERS_FROM_GUILD(guild_id: str, user_ids: List[str], delete_message_seconds: int = 0,
-                                                reason: str = "") -> Any:
+                                                ) -> Any:
     """Bulk ban users from a guild.
     
     Parameters:
@@ -3133,8 +3113,6 @@ async def DISCORDBOT_BULK_BAN_USERS_FROM_GUILD(guild_id: str, user_ids: List[str
                 "delete_message_seconds": delete_message_seconds if delete_message_seconds > 0 else None
             })
             headers = DEFAULT_HEADERS.copy()
-            if reason:
-                headers["X-Audit-Log-Reason"] = _safe_str(reason)
             
             result = await discord_request("PUT", f"/guilds/{guild_id}/bans/{user_id}", json=payload, headers=headers)
             results.append({
@@ -3159,7 +3137,7 @@ async def DISCORDBOT_BULK_BAN_USERS_FROM_GUILD(guild_id: str, user_ids: List[str
 
 @mcp.tool()
 async def DISCORDBOT_BAN_USER_FROM_GUILD(guild_id: str, user_id: str, delete_message_seconds: int = 0,
-                                          reason: str = "") -> Any:
+                                          ) -> Any:
     """Ban a user from a Discord server.
     
     This tool permanently bans a user from a Discord server. The user will be unable to rejoin
@@ -3208,12 +3186,10 @@ async def DISCORDBOT_BAN_USER_FROM_GUILD(guild_id: str, user_id: str, delete_mes
         "delete_message_seconds": delete_message_seconds if delete_message_seconds > 0 else None
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PUT", f"/guilds/{guild_id}/bans/{user_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_UNBAN_USER_FROM_GUILD(guild_id: str, user_id: str, reason: str = "") -> Any:
+async def DISCORDBOT_UNBAN_USER_FROM_GUILD(guild_id: str, user_id: str) -> Any:
     """Remove a ban for a user from a Discord server.
     
     This tool removes a ban for a user, allowing them to rejoin the Discord server.
@@ -3246,8 +3222,6 @@ async def DISCORDBOT_UNBAN_USER_FROM_GUILD(guild_id: str, user_id: str, reason: 
     guild_id = _validate_guild_id(guild_id)
     user_id = _validate_user_id(user_id)
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/bans/{user_id}", headers=headers)
 
 # ---------------- USER & MEMBER MANAGEMENT (12 tools) ----------------
@@ -3364,7 +3338,7 @@ async def DISCORDBOT_ADD_GUILD_MEMBER(guild_id: str, user_id: str, access_token:
     return await discord_request("PUT", f"/guilds/{guild_id}/members/{user_id}", json=payload)
 
 @mcp.tool()
-async def DISCORDBOT_ADD_GUILD_MEMBER_ROLE(guild_id: str, user_id: str, role_id: str, reason: str = "") -> Any:
+async def DISCORDBOT_ADD_GUILD_MEMBER_ROLE(guild_id: str, user_id: str, role_id: str) -> Any:
     """Adds a role to a guild member.
     
     Parameters:
@@ -3377,12 +3351,10 @@ async def DISCORDBOT_ADD_GUILD_MEMBER_ROLE(guild_id: str, user_id: str, role_id:
     user_id = _validate_user_id(user_id)
     role_id = _validate_snowflake(role_id, "Role ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PUT", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_GUILD_MEMBER_ROLE(guild_id: str, user_id: str, role_id: str, reason: str = "") -> Any:
+async def DISCORDBOT_DELETE_GUILD_MEMBER_ROLE(guild_id: str, user_id: str, role_id: str) -> Any:
     """Removes a role from a guild member.
     
     Parameters:
@@ -3395,12 +3367,10 @@ async def DISCORDBOT_DELETE_GUILD_MEMBER_ROLE(guild_id: str, user_id: str, role_
     user_id = _validate_user_id(user_id)
     role_id = _validate_snowflake(role_id, "Role ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/members/{user_id}/roles/{role_id}", headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_GUILD_MEMBER(guild_id: str, user_id: str, reason: str = "") -> Any:
+async def DISCORDBOT_DELETE_GUILD_MEMBER(guild_id: str, user_id: str) -> Any:
     """Remove a member from a guild.
     
     Parameters:
@@ -3411,8 +3381,6 @@ async def DISCORDBOT_DELETE_GUILD_MEMBER(guild_id: str, user_id: str, reason: st
     guild_id = _validate_guild_id(guild_id)
     user_id = _validate_user_id(user_id)
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/members/{user_id}", headers=headers)
 
 @mcp.tool()
@@ -3497,7 +3465,7 @@ async def DISCORDBOT_GET_GUILD_MEMBER(guild_id: str, user_id: str) -> Any:
     return await discord_request("GET", f"/guilds/{guild_id}/members/{user_id}")
 
 @mcp.tool()
-async def DISCORDBOT_SEARCH_GUILD_MEMBERS(guild_id: str, query: str = "", limit: int = 0) -> Any:
+async def DISCORDBOT_SEARCH_GUILD_MEMBERS(guild_id: str, query: str , limit: int = 0) -> Any:
     """Search for guild members based on query string.
     
     Parameters:
@@ -3514,8 +3482,7 @@ async def DISCORDBOT_SEARCH_GUILD_MEMBERS(guild_id: str, query: str = "", limit:
 
 # ---------------- EMOJI & STICKER MANAGEMENT (12 tools) ----------------
 @mcp.tool()
-async def DISCORDBOT_CREATE_GUILD_EMOJI(guild_id: str, name: str, file_path: str, roles: Optional[List[str]] = None,
-                                        reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_CREATE_GUILD_EMOJI(guild_id: str, name: str, file_path: str, roles: Optional[List[str]] = None) -> Any:
     """
     Create a new custom emoji in a specified Discord guild from a local file.
 
@@ -3558,8 +3525,6 @@ async def DISCORDBOT_CREATE_GUILD_EMOJI(guild_id: str, name: str, file_path: str
         "roles": _safe_list(roles)
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("POST", f"/guilds/{guild_id}/emojis", json=payload, headers=headers)
 
 @mcp.tool()
@@ -3578,7 +3543,7 @@ async def DISCORDBOT_GET_GUILD_EMOJI(guild_id: str, emoji_id: str) -> Any:
 
 @mcp.tool()
 async def DISCORDBOT_UPDATE_GUILD_EMOJI(guild_id: str, emoji_id: str, name: Optional[str] = None,
-                                        roles: Optional[List[str]] = None, reason: Optional[str] = None) -> Any:
+                                        roles: Optional[List[str]] = None) -> Any:
     """
     Update a guild emoji's name and/or roles.
     Args:
@@ -3602,12 +3567,10 @@ async def DISCORDBOT_UPDATE_GUILD_EMOJI(guild_id: str, emoji_id: str, name: Opti
         payload["roles"] = _safe_list(roles)
 
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PATCH", f"/guilds/{guild_id}/emojis/{emoji_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_GUILD_EMOJI(guild_id: str, emoji_id: str, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_DELETE_GUILD_EMOJI(guild_id: str, emoji_id: str) -> Any:
     """
     Deletes a custom emoji from a Discord guild.
     Args:
@@ -3620,8 +3583,6 @@ async def DISCORDBOT_DELETE_GUILD_EMOJI(guild_id: str, emoji_id: str, reason: Op
     guild_id = _validate_guild_id(guild_id)
     emoji_id = _validate_snowflake(emoji_id, "Emoji ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/emojis/{emoji_id}", headers=headers)
 
 @mcp.tool()
@@ -3638,7 +3599,7 @@ async def DISCORDBOT_LIST_GUILD_EMOJIS(guild_id: str) -> Any:
 
 @mcp.tool()
 async def DISCORDBOT_CREATE_GUILD_STICKER(guild_id: str, name: str, description: str, tags: str,
-                                          file: str, reason: Optional[str] = None) -> Any:
+                                          file: str) -> Any:
     """
     Creates a new sticker in a specified Discord guild.
 
@@ -3658,6 +3619,14 @@ async def DISCORDBOT_CREATE_GUILD_STICKER(guild_id: str, name: str, description:
     """
     guild_id = _validate_guild_id(guild_id)
     
+    # Validate name length
+    if not name or len(name) < 2 or len(name) > 30:
+        raise ValueError("Sticker name must be 2-30 characters.")
+    
+    # Validate description length
+    if not description or len(description) < 2 or len(description) > 100:
+        raise ValueError("Sticker description must be 2-100 characters.")
+    
     # Validate tags parameter
     if tags and len(tags) > 200:
         raise ValueError("Tags must be 200 characters or less.")
@@ -3668,8 +3637,12 @@ async def DISCORDBOT_CREATE_GUILD_STICKER(guild_id: str, name: str, description:
 
     with open(file, "rb") as f:
         file_data = f.read()
+    
+    # Check file size (512KB limit)
+    if len(file_data) > 512 * 1024:
+        raise ValueError("Sticker file must be 512KB or smaller.")
 
-    # Determine MIME type
+    # Determine MIME type and validate file extension
     ext = os.path.splitext(file)[1].lower()
     if ext == ".png":
         mime = "image/png"
@@ -3689,8 +3662,6 @@ async def DISCORDBOT_CREATE_GUILD_STICKER(guild_id: str, name: str, description:
     
     files = {"file": (os.path.basename(file), file_data, mime)}
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     headers.pop("Content-Type", None)  # Remove for multipart
     
     return await discord_request("POST", f"/guilds/{guild_id}/stickers", data=form_data, files=files, headers=headers)
@@ -3717,7 +3688,7 @@ async def DISCORDBOT_GET_GUILD_STICKER(guild_id: str, sticker_id: str) -> Any:
 @mcp.tool()
 async def DISCORDBOT_UPDATE_GUILD_STICKER(guild_id: str, sticker_id: str, name: Optional[str] = None,
                                           description: Optional[str] = None, tags: Optional[str] = None,
-                                          reason: Optional[str] = None) -> Any:
+                                          ) -> Any:
     """
     Updates a sticker in a specified Discord guild. Supports partial updates.
 
@@ -3747,12 +3718,10 @@ async def DISCORDBOT_UPDATE_GUILD_STICKER(guild_id: str, sticker_id: str, name: 
         payload["tags"] = _safe_str(tags)
 
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PATCH", f"/guilds/{guild_id}/stickers/{sticker_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_GUILD_STICKER(guild_id: str, sticker_id: str, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_DELETE_GUILD_STICKER(guild_id: str, sticker_id: str) -> Any:
     """
     Deletes a sticker from a specified Discord guild.
 
@@ -3770,8 +3739,6 @@ async def DISCORDBOT_DELETE_GUILD_STICKER(guild_id: str, sticker_id: str, reason
     guild_id = _validate_guild_id(guild_id)
     sticker_id = _validate_snowflake(sticker_id, "Sticker ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/stickers/{sticker_id}", headers=headers)
 
 @mcp.tool()
@@ -3823,7 +3790,7 @@ async def DISCORDBOT_GET_STICKER(sticker_id: str) -> Any:
 
 # ---------------- WEBHOOK MANAGEMENT (17 tools) ----------------
 @mcp.tool()
-async def DISCORDBOT_CREATE_WEBHOOK(channel_id: str, name: str, avatar: Optional[str] = None, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_CREATE_WEBHOOK(channel_id: str, name: str, avatar: Optional[str] = None) -> Any:
     """
     Creates a new webhook for a Discord channel.
 
@@ -3844,8 +3811,6 @@ async def DISCORDBOT_CREATE_WEBHOOK(channel_id: str, name: str, avatar: Optional
         "avatar": avatar
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("POST", f"/channels/{channel_id}/webhooks", json=payload, headers=headers)
 
 @mcp.tool()
@@ -3864,7 +3829,7 @@ async def DISCORDBOT_GET_WEBHOOK(webhook_id: str) -> Any:
 
 @mcp.tool()
 async def DISCORDBOT_UPDATE_WEBHOOK(webhook_id: str, name: Optional[str] = None, avatar: Optional[str] = None,
-                                    channel_id: Optional[str] = None, reason: Optional[str] = None) -> Any:
+                                    channel_id: Optional[str] = None) -> Any:
     """
     Updates a webhook's properties.
 
@@ -3887,12 +3852,10 @@ async def DISCORDBOT_UPDATE_WEBHOOK(webhook_id: str, name: Optional[str] = None,
         "channel_id": channel_id
     })
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("PATCH", f"/webhooks/{webhook_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_WEBHOOK(webhook_id: str, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_DELETE_WEBHOOK(webhook_id: str) -> Any:
     """
     Deletes a webhook permanently.
 
@@ -3907,8 +3870,6 @@ async def DISCORDBOT_DELETE_WEBHOOK(webhook_id: str, reason: Optional[str] = Non
     """
     webhook_id = _validate_snowflake(webhook_id, "Webhook ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/webhooks/{webhook_id}", headers=headers)
 
 @mcp.tool()
@@ -3968,11 +3929,11 @@ async def DISCORDBOT_DELETE_WEBHOOK_BY_TOKEN(webhook_id: str, webhook_token: str
 @mcp.tool()
 async def DISCORDBOT_EXECUTE_WEBHOOK(webhook_id: str, webhook_token: str, content: Optional[str] = None,
                                      username: Optional[str] = None, avatar_url: Optional[str] = None,
-                                     tts: Optional[bool] = None, embeds: Optional[List[Dict[str, Any]]] = None,
+                                     tts: bool = False, embeds: Optional[List[Dict[str, Any]]] = None,
                                      allowed_mentions: Optional[Dict[str, Any]] = None, components: Optional[List[Dict[str, Any]]] = None,
                                      files: Optional[List[Union[str, BinaryIO]]] = None, payload_json: Optional[str] = None,
                                      attachments: Optional[List[Dict[str, Any]]] = None, flags: Optional[int] = None,
-                                     thread_name: Optional[str] = None, wait: Optional[bool] = None) -> Any:
+                                     thread_name: Optional[str] = None, wait: bool = False) -> Any:
     """
     Executes a webhook to send a message to a Discord channel.
 
@@ -3982,7 +3943,7 @@ async def DISCORDBOT_EXECUTE_WEBHOOK(webhook_id: str, webhook_token: str, conten
         content (Optional[str]): The message content (max 2000 characters).
         username (Optional[str]): Override the webhook's username.
         avatar_url (Optional[str]): Override the webhook's avatar URL.
-        tts (Optional[bool]): Whether to send as text-to-speech.
+        tts (bool): Whether to send as text-to-speech.
         embeds (Optional[List[Dict[str, Any]]]): Array of embed objects.
         allowed_mentions (Optional[Dict[str, Any]]): Allowed mentions configuration.
         components (Optional[List[Dict[str, Any]]]): Array of message components.
@@ -3991,7 +3952,7 @@ async def DISCORDBOT_EXECUTE_WEBHOOK(webhook_id: str, webhook_token: str, conten
         attachments (Optional[List[Dict[str, Any]]]): Array of attachment objects.
         flags (Optional[int]): Message flags.
         thread_name (Optional[str]): Name for thread creation.
-        wait (Optional[bool]): Whether to wait for message creation.
+        wait (bool): Whether to wait for message creation.
     
     Returns:
         dict: Message object if wait=True, otherwise empty response.
@@ -4010,11 +3971,9 @@ async def DISCORDBOT_EXECUTE_WEBHOOK(webhook_id: str, webhook_token: str, conten
         "thread_name": _safe_str(thread_name)
     })
     
-    # Handle boolean parameters separately to avoid filtering out False values
-    if tts is not None:
-        payload["tts"] = tts
-    if wait is not None:
-        payload["wait"] = wait
+    # Handle boolean parameters - always include them since they have defaults
+    payload["tts"] = tts
+    payload["wait"] = wait
     
     if files:
         multipart_data = await _handle_file_upload(files, payload)
@@ -4024,7 +3983,7 @@ async def DISCORDBOT_EXECUTE_WEBHOOK(webhook_id: str, webhook_token: str, conten
 
 @mcp.tool()
 async def DISCORDBOT_EXECUTE_SLACK_COMPATIBLE_WEBHOOK(webhook_id: str, webhook_token: str, payload: Dict[str, Any],
-                                                      wait: Optional[bool] = None, thread_id: Optional[str] = None) -> Any:
+                                                      wait: bool = False, thread_id: Optional[str] = None) -> Any:
     """
     Executes a webhook in Slack-compatible mode.
 
@@ -4032,7 +3991,7 @@ async def DISCORDBOT_EXECUTE_SLACK_COMPATIBLE_WEBHOOK(webhook_id: str, webhook_t
         webhook_id (str): The ID of the webhook to execute.
         webhook_token (str): The token of the webhook.
         payload (Dict[str, Any]): The Slack-compatible payload.
-        wait (Optional[bool]): Whether to wait for message creation.
+        wait (bool): Whether to wait for message creation.
         thread_id (Optional[str]): The thread ID to send the message to.
 
     Returns:
@@ -4047,7 +4006,7 @@ async def DISCORDBOT_EXECUTE_SLACK_COMPATIBLE_WEBHOOK(webhook_id: str, webhook_t
 
 @mcp.tool()
 async def DISCORDBOT_EXECUTE_GITHUB_COMPATIBLE_WEBHOOK(webhook_id: str, webhook_token: str, payload: Dict[str, Any],
-                                                       wait: Optional[bool] = None, thread_id: Optional[str] = None) -> Any:
+                                                       wait: bool = False, thread_id: Optional[str] = None) -> Any:
     """
     Executes a webhook in GitHub-compatible mode.
 
@@ -4055,7 +4014,7 @@ async def DISCORDBOT_EXECUTE_GITHUB_COMPATIBLE_WEBHOOK(webhook_id: str, webhook_
         webhook_id (str): The ID of the webhook to execute.
         webhook_token (str): The token of the webhook.
         payload (Dict[str, Any]): The GitHub-compatible payload.
-        wait (Optional[bool]): Whether to wait for message creation.
+        wait (bool): Whether to wait for message creation.
         thread_id (Optional[str]): The thread ID to send the message to.
 
     Returns:
@@ -4323,7 +4282,7 @@ async def DISCORDBOT_UPDATE_GUILD(guild_id: str, **kwargs) -> Any:
     return await discord_request("PATCH", f"/guilds/{guild_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_GET_GUILD(guild_id: str, with_counts: Optional[bool] = None) -> Any:
+async def DISCORDBOT_GET_GUILD(guild_id: str, with_counts: bool = False) -> Any:
     """
     Retrieves detailed information about a specific guild (server).
 
@@ -4331,7 +4290,7 @@ async def DISCORDBOT_GET_GUILD(guild_id: str, with_counts: Optional[bool] = None
 
     Args:
         guild_id (str): The ID of the guild to retrieve.
-        with_counts (Optional[bool]): When true, includes approximate member 
+        with_counts (bool): When true, includes approximate member 
                                       and presence counts.
     """
     guild_id = _validate_guild_id(guild_id)
@@ -4447,8 +4406,8 @@ async def DISCORDBOT_GET_GUILD_BAN(guild_id: str, user_id: str) -> Any:
     return await discord_request("GET", f"/guilds/{guild_id}/bans/{user_id}")
 
 @mcp.tool()
-async def DISCORDBOT_PRUNE_GUILD(guild_id: str, days: Optional[int] = None, compute_prune_count: Optional[bool] = None,
-                                 include_roles: Optional[List[str]] = None, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_PRUNE_GUILD(guild_id: str, days: Optional[int] = None, compute_prune_count: bool = False,
+                                 include_roles: Optional[List[str]] = None) -> Any:
     """
     Kicks inactive members from a guild (server).
 
@@ -4457,7 +4416,7 @@ async def DISCORDBOT_PRUNE_GUILD(guild_id: str, days: Optional[int] = None, comp
     Args:
         guild_id (str): The ID of the guild to prune.
         days (Optional[int]): Number of inactivity days before pruning (1-30).
-        compute_prune_count (Optional[bool]): If true, returns the number of members
+        compute_prune_count (bool): If true, returns the number of members
             that would be pruned without actually kicking them.
         include_roles (Optional[List[str]]): List of role IDs to restrict pruning to.
         reason: Optional reason for audit log.
@@ -4467,14 +4426,11 @@ async def DISCORDBOT_PRUNE_GUILD(guild_id: str, days: Optional[int] = None, comp
     payload = {}
     if days is not None:
         payload["days"] = days
-    if compute_prune_count is not None:
-        payload["compute_prune_count"] = compute_prune_count
+    payload["compute_prune_count"] = compute_prune_count
     if include_roles is not None:
         payload["include_roles"] = include_roles
 
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     
     return await discord_request("POST", f"/guilds/{guild_id}/prune", json=payload, headers=headers)
 
@@ -4569,7 +4525,7 @@ async def DISCORDBOT_UPDATE_GUILD_ROLE(guild_id: str, role_id: str, **kwargs) ->
     return await discord_request("PATCH", f"/guilds/{guild_id}/roles/{role_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_GUILD_ROLE(guild_id: str, role_id: str, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_DELETE_GUILD_ROLE(guild_id: str, role_id: str) -> Any:
     """
     Deletes a role from a guild.
 
@@ -4583,8 +4539,6 @@ async def DISCORDBOT_DELETE_GUILD_ROLE(guild_id: str, role_id: str, reason: Opti
     guild_id = _validate_guild_id(guild_id)
     role_id = _validate_snowflake(role_id, "Role ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/roles/{role_id}", headers=headers)
 
 @mcp.tool()
@@ -4758,7 +4712,7 @@ async def DISCORDBOT_GET_GUILDS_ONBOARDING(guild_id: str) -> Any:
 @mcp.tool()
 async def DISCORDBOT_PUT_GUILDS_ONBOARDING(guild_id: str, prompts: Optional[List[Dict]] = None,
                                            default_channel_ids: Optional[List[str]] = None,
-                                           enabled: bool = True, mode: int = 0, reason: Optional[str] = None) -> Any:
+                                           enabled: bool = True, mode: int = 0) -> Any:
     """
     Updates a guild's onboarding configuration. Replaces the entire configuration.
 
@@ -4786,8 +4740,6 @@ async def DISCORDBOT_PUT_GUILDS_ONBOARDING(guild_id: str, prompts: Optional[List
     }
     
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
         
     return await discord_request("PUT", f"/guilds/{guild_id}/onboarding", json=payload, headers=headers)
 
@@ -4818,8 +4770,8 @@ async def DISCORDBOT_GET_GUILD_WIDGET_SETTINGS(guild_id: str) -> Any:
     return await discord_request("GET", f"/guilds/{guild_id}/widget")
 
 @mcp.tool()
-async def DISCORDBOT_UPDATE_GUILD_WIDGET_SETTINGS(guild_id: str, enabled: Optional[bool] = None,
-                                                   channel_id: Optional[str] = None, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_UPDATE_GUILD_WIDGET_SETTINGS(guild_id: str, enabled: bool = True,
+                                                   channel_id: Optional[str] = None) -> Any:
     """
     Updates the widget settings for a specific guild to point to a non-default channel.
 
@@ -4831,20 +4783,17 @@ async def DISCORDBOT_UPDATE_GUILD_WIDGET_SETTINGS(guild_id: str, enabled: Option
         enabled (bool): Whether the widget is enabled (default True).
         reason: Optional reason for audit log.
     """
-    if enabled is None and channel_id is None:
-        raise ValueError("At least one setting (enabled or channel_id) must be provided.")
+    if channel_id is None:
+        raise ValueError("At least one setting (channel_id) must be provided.")
 
     guild_id = _validate_guild_id(guild_id)
     
     payload = {}
-    if enabled is not None:
-        payload["enabled"] = enabled
+    payload["enabled"] = enabled
     if channel_id is not None:
         payload["channel_id"] = channel_id
     
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
         
     return await discord_request("PATCH", f"/guilds/{guild_id}/widget", json=payload, headers=headers)
 
@@ -4863,9 +4812,9 @@ async def DISCORDBOT_GET_GUILD_WELCOME_SCREEN(guild_id: str) -> Any:
     return await discord_request("GET", f"/guilds/{guild_id}/welcome-screen")
 
 @mcp.tool()
-async def DISCORDBOT_UPDATE_GUILD_WELCOME_SCREEN(guild_id: str, enabled: Optional[bool] = None,
+async def DISCORDBOT_UPDATE_GUILD_WELCOME_SCREEN(guild_id: str, enabled: bool = True,
                                                 welcome_channels: Optional[List[Dict]] = None,
-                                                description: Optional[str] = None, reason: Optional[str] = None) -> Any:
+                                                description: Optional[str] = None) -> Any:
     """
     Updates the welcome screen for a guild.
 
@@ -4874,27 +4823,24 @@ async def DISCORDBOT_UPDATE_GUILD_WELCOME_SCREEN(guild_id: str, enabled: Optiona
 
     Args:
         guild_id (str): The ID of the guild to update the welcome screen for.
-        enabled (Optional[bool]): Whether the welcome screen is enabled.
+        enabled (bool): Whether the welcome screen is enabled.
         welcome_channels (Optional[List[Dict]]): Array of welcome channel objects.
         description (Optional[str]): The server description shown in the welcome screen.
         reason: Optional reason for audit log.
     """
-    if enabled is None and welcome_channels is None and description is None:
-        raise ValueError("At least one field (enabled, welcome_channels, or description) must be provided.")
+    if welcome_channels is None and description is None:
+        raise ValueError("At least one field (welcome_channels, or description) must be provided.")
 
     guild_id = _validate_guild_id(guild_id)
     
     payload = {}
-    if enabled is not None:
-        payload["enabled"] = enabled
+    payload["enabled"] = enabled
     if welcome_channels is not None:
         payload["welcome_channels"] = welcome_channels
     if description is not None:
         payload["description"] = description
     
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
         
     return await discord_request("PATCH", f"/guilds/{guild_id}/welcome-screen", json=payload, headers=headers)
 
@@ -4913,7 +4859,7 @@ async def DISCORDBOT_GET_GUILD_VANITY_URL(guild_id: str) -> Any:
     return await discord_request("GET", f"/guilds/{guild_id}/vanity-url")
 
 @mcp.tool()
-async def DISCORDBOT_GET_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled_event_id: str, with_user_count: Optional[bool] = None) -> Any:
+async def DISCORDBOT_GET_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled_event_id: str, with_user_count: bool = False) -> Any:
     """
     Retrieves a specific scheduled event from a guild.
 
@@ -4922,7 +4868,7 @@ async def DISCORDBOT_GET_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled_ev
     Args:
         guild_id (str): The ID of the guild where the event exists.
         guild_scheduled_event_id (str): The ID of the scheduled event to retrieve.
-        with_user_count (Optional[bool]): If true, includes the number of subscribed users.
+        with_user_count (bool): If true, includes the number of subscribed users.
     """
     guild_id = _validate_guild_id(guild_id)
     guild_scheduled_event_id = _validate_snowflake(guild_scheduled_event_id, "Scheduled Event ID")
@@ -4935,9 +4881,9 @@ async def DISCORDBOT_GET_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled_ev
 @mcp.tool()
 async def DISCORDBOT_CREATE_GUILD_SCHEDULED_EVENT(guild_id: str, name: str, privacy_level: int,
                                                   scheduled_start_time: str, entity_type: int,
-                                                  channel_id: str, description: str,
-                                                  scheduled_end_time: str, location: Optional[str] = None,
-                                                  image: Optional[str] = None, reason: Optional[str] = None) -> Any:
+                                                  channel_id: Optional[str] = None, description: Optional[str] = None,
+                                                  scheduled_end_time: Optional[str] = None, location: Optional[str] = None,
+                                                  image: Optional[str] = None) -> Any:
     """
     Creates a new scheduled event in a guild.
 
@@ -4978,8 +4924,6 @@ async def DISCORDBOT_CREATE_GUILD_SCHEDULED_EVENT(guild_id: str, name: str, priv
         payload["image"] = image
     
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
         
     return await discord_request("POST", f"/guilds/{guild_id}/scheduled-events", json=payload, headers=headers)
 
@@ -5013,7 +4957,7 @@ async def DISCORDBOT_UPDATE_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled
     return await discord_request("PATCH", f"/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}", json=payload, headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled_event_id: str, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_DELETE_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled_event_id: str) -> Any:
     """
     Deletes a guild scheduled event.
 
@@ -5027,12 +4971,10 @@ async def DISCORDBOT_DELETE_GUILD_SCHEDULED_EVENT(guild_id: str, guild_scheduled
     guild_id = _validate_guild_id(guild_id)
     guild_scheduled_event_id = _validate_snowflake(guild_scheduled_event_id, "Scheduled Event ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}", headers=headers)
 
 @mcp.tool()
-async def DISCORDBOT_LIST_GUILD_SCHEDULED_EVENTS(guild_id: str, with_user_count: Optional[bool] = None) -> Any:
+async def DISCORDBOT_LIST_GUILD_SCHEDULED_EVENTS(guild_id: str, with_user_count: bool = False) -> Any:
     """
     Retrieves a list of scheduled events for a guild.
 
@@ -5040,7 +4982,7 @@ async def DISCORDBOT_LIST_GUILD_SCHEDULED_EVENTS(guild_id: str, with_user_count:
 
     Args:
         guild_id (str): The ID of the guild to retrieve events from.
-        with_user_count (Optional[bool]): If true, includes the number of subscribed users.
+        with_user_count (bool): If true, includes the number of subscribed users.
     """
     guild_id = _validate_guild_id(guild_id)
     
@@ -5051,7 +4993,7 @@ async def DISCORDBOT_LIST_GUILD_SCHEDULED_EVENTS(guild_id: str, with_user_count:
 
 @mcp.tool()
 async def DISCORDBOT_LIST_GUILD_SCHEDULED_EVENT_USERS(guild_id: str, guild_scheduled_event_id: str,
-                                                      limit: Optional[int] = None, with_member: Optional[bool] = None,
+                                                      limit: Optional[int] = None, with_member: bool = False,
                                                       before: Optional[str] = None, after: Optional[str] = None) -> Any:
     """
     Retrieves a list of users subscribed to a guild scheduled event.
@@ -5062,7 +5004,7 @@ async def DISCORDBOT_LIST_GUILD_SCHEDULED_EVENT_USERS(guild_id: str, guild_sched
         guild_id (str): The ID of the guild where the event exists.
         guild_scheduled_event_id (str): The ID of the scheduled event.
         limit (Optional[int]): Max number of users to return (1-100).
-        with_member (Optional[bool]): If true, includes guild member data.
+        with_member (bool): If true, includes guild member data.
         before (Optional[str]): The user ID to start fetching users before.
         after (Optional[str]): The user ID to start fetching users after.
     """
@@ -5072,8 +5014,7 @@ async def DISCORDBOT_LIST_GUILD_SCHEDULED_EVENT_USERS(guild_id: str, guild_sched
     params = {}
     if limit is not None:
         params["limit"] = limit
-    if with_member is not None:
-        params["with_member"] = with_member
+    params["with_member"] = with_member
     if before is not None:
         params["before"] = before
     if after is not None:
@@ -5112,7 +5053,7 @@ async def DISCORDBOT_LIST_GUILD_INTEGRATIONS(guild_id: str) -> Any:
     return await discord_request("GET", f"/guilds/{guild_id}/integrations")
 
 @mcp.tool()
-async def DISCORDBOT_DELETE_GUILD_INTEGRATION(guild_id: str, integration_id: str, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_DELETE_GUILD_INTEGRATION(guild_id: str, integration_id: str) -> Any:
     """
     Deletes an integration from a guild.
 
@@ -5126,35 +5067,34 @@ async def DISCORDBOT_DELETE_GUILD_INTEGRATION(guild_id: str, integration_id: str
     guild_id = _validate_guild_id(guild_id)
     integration_id = _validate_snowflake(integration_id, "Integration ID")
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/guilds/{guild_id}/integrations/{integration_id}", headers=headers)
 
 # ---------------- INVITES & TEMPLATES (8 tools) ----------------
 @mcp.tool()
-async def DISCORDBOT_INVITE_RESOLVE(invite_code: str, with_counts: Optional[bool] = None,
-                                   with_expiration: Optional[bool] = None, guild_scheduled_event_id: Optional[str] = None) -> Any:
+async def DISCORDBOT_INVITE_RESOLVE(invite_code: str, with_counts: bool = False,
+                                   with_expiration: bool = False, guild_scheduled_event_id: str = "") -> Any:
     """
     Retrieves an invite object for the given invite code.
 
     Args:
         invite_code (str): The invite code to resolve.
-        with_counts (Optional[bool]): Whether to include approximate member counts.
-        with_expiration (Optional[bool]): Whether to include expiration date.
-        guild_scheduled_event_id (Optional[str]): The scheduled event ID to include.
+        with_counts (bool): Whether to include approximate member counts.
+        with_expiration (bool): Whether to include expiration date.
+        guild_scheduled_event_id (str): The scheduled event ID to include.
 
     Returns:
         dict: Invite object containing invite details.
     """
     params = _filter_none({
         "with_counts": with_counts,
-        "with_expiration": with_expiration,
-        "guild_scheduled_event_id": guild_scheduled_event_id
+        "with_expiration": with_expiration
     })
+    if guild_scheduled_event_id:
+        params["guild_scheduled_event_id"] = guild_scheduled_event_id
     return await discord_request("GET", f"/invites/{invite_code}", params=params)
 
 @mcp.tool()
-async def DISCORDBOT_INVITE_REVOKE(invite_code: str, reason: Optional[str] = None) -> Any:
+async def DISCORDBOT_INVITE_REVOKE(invite_code: str) -> Any:
     """
     Deletes an invite.
 
@@ -5168,8 +5108,6 @@ async def DISCORDBOT_INVITE_REVOKE(invite_code: str, reason: Optional[str] = Non
         dict: Confirmation of deletion.
     """
     headers = DEFAULT_HEADERS.copy()
-    if reason:
-        headers["X-Audit-Log-Reason"] = _safe_str(reason)
     return await discord_request("DELETE", f"/invites/{invite_code}", headers=headers)
 
 # ---------------- MISCELLANEOUS / UTILITY (4 tools) ----------------
